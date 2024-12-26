@@ -1,8 +1,8 @@
+import 'dart:io'; // File sınıfını kullanabilmek için eklendi
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'edit_profile_screen.dart';
-import 'change_password_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({Key? key}) : super(key: key);
@@ -18,15 +18,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   int postCount = 0;
   int followersCount = 0;
   int followingCount = 0;
-  bool isFollowing = false;
-  bool isEmailVerified = false;
   bool isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _loadUserData();
-    _loadFollowData();
   }
 
   Future<void> _loadUserData() async {
@@ -37,83 +34,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
 
-    isEmailVerified = user!.emailVerified;
-
     try {
-      DocumentSnapshot doc = await FirebaseFirestore.instance
+      final doc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user!.uid)
           .get();
 
       if (doc.exists) {
-        username = doc.get('username');
-        profileImageUrl = doc.get('profileImageUrl');
-        postCount = doc.get('postCount') ?? 0;
+        final data = doc.data() as Map<String, dynamic>;
+        setState(() {
+          username = data['username'];
+          profileImageUrl = data['profileImageUrl'];
+          postCount = data['postCount'] ?? 0;
+          followersCount = data['followersCount'] ?? 0;
+          followingCount = data['followingCount'] ?? 0;
+          isLoading = false;
+        });
       }
     } catch (e) {
-      // Hata durumunda
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error loading profile data: $e')),
+      );
+      setState(() {
+        isLoading = false;
+      });
     }
-
-    setState(() {
-      isLoading = false;
-    });
-  }
-
-  Future<void> _loadFollowData() async {
-    try {
-      DocumentSnapshot doc = await FirebaseFirestore.instance
-          .collection('followers')
-          .doc(user!.uid)
-          .get();
-
-      if (doc.exists) {
-        followersCount = doc.get('count') ?? 0;
-        isFollowing = doc.get('isFollowing') ?? false;
-      }
-
-      DocumentSnapshot followingDoc = await FirebaseFirestore.instance
-          .collection('following')
-          .doc(user!.uid)
-          .get();
-
-      if (followingDoc.exists) {
-        followingCount = followingDoc.get('count') ?? 0;
-      }
-    } catch (e) {
-      // Hata durumunda
-    }
-
-    setState(() {});
-  }
-
-  Future<void> _toggleFollow() async {
-    setState(() {
-      isFollowing = !isFollowing;
-    });
-
-    try {
-      final docRef = FirebaseFirestore.instance
-          .collection('followers')
-          .doc(user!.uid);
-
-      if (isFollowing) {
-        followersCount++;
-        await docRef.set({'count': followersCount, 'isFollowing': true});
-      } else {
-        followersCount--;
-        await docRef.set({'count': followersCount, 'isFollowing': false});
-      }
-    } catch (e) {
-      // Hata durumunda
-    }
-
-    setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
-    final email = user?.email ?? 'No Email Found';
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Profile'),
@@ -132,17 +81,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
           : SingleChildScrollView(
               child: Column(
                 children: [
-                  // Profil Bilgileri
                   Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: Row(
                       children: [
                         CircleAvatar(
                           radius: 50,
-                          backgroundImage: profileImageUrl != null
+                          backgroundImage: profileImageUrl != null && profileImageUrl!.isNotEmpty
                               ? NetworkImage(profileImageUrl!)
                               : null,
-                          child: profileImageUrl == null
+                          child: profileImageUrl == null || profileImageUrl!.isEmpty
                               ? const Icon(Icons.person, size: 50)
                               : null,
                         ),
@@ -166,16 +114,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     MaterialPageRoute(
                                       builder: (context) => const EditProfileScreen(),
                                     ),
-                                  ).then((_) {
-                                    _loadUserData();
-                                  });
+                                  ).then((_) => _loadUserData());
                                 },
                                 child: const Text('Edit Profile'),
-                              ),
-                              const SizedBox(height: 10),
-                              ElevatedButton(
-                                onPressed: _toggleFollow,
-                                child: Text(isFollowing ? 'Unfollow' : 'Follow'),
                               ),
                             ],
                           ),
@@ -184,7 +125,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                   const Divider(),
-                  // Gönderiler
                   StreamBuilder<QuerySnapshot>(
                     stream: FirebaseFirestore.instance
                         .collection('posts')
@@ -192,7 +132,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         .snapshots(),
                     builder: (context, snapshot) {
                       if (!snapshot.hasData) {
-                        return const CircularProgressIndicator();
+                        return const Center(child: CircularProgressIndicator());
                       }
 
                       final posts = snapshot.data!.docs;
@@ -208,10 +148,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         itemCount: posts.length,
                         itemBuilder: (context, index) {
                           final post = posts[index].data() as Map<String, dynamic>;
-                          return Image.network(
-                            post['mediaUrl'] ?? '',
-                            fit: BoxFit.cover,
-                          );
+                          try {
+                            return Image.network(
+                              post['mediaPath'] ?? '',
+                              fit: BoxFit.cover,
+                            );
+                          } catch (e) {
+                            debugPrint('Error loading image: $e');
+                            return const Icon(Icons.error);
+                          }
                         },
                       );
                     },

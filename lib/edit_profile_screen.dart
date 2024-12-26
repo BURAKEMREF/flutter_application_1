@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 
 class EditProfileScreen extends StatefulWidget {
@@ -14,76 +13,125 @@ class EditProfileScreen extends StatefulWidget {
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final User? user = FirebaseAuth.instance.currentUser;
-  TextEditingController usernameController = TextEditingController();
+  final TextEditingController usernameController = TextEditingController();
   String? profileImageUrl;
+  File? localImageFile;
   bool isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadCurrentData();
+    _initializeUserDocument();
   }
 
-  Future<void> _loadCurrentData() async {
-    if (user == null) {
-      setState(() {
-        isLoading = false;
-      });
-      return;
-    }
-
-    DocumentSnapshot doc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user!.uid)
-        .get();
-
-    if (doc.exists) {
-      usernameController.text = doc.get('username') ?? '';
-      if ((doc.data() as Map).containsKey('profileImageUrl')) {
-        profileImageUrl = doc.get('profileImageUrl');
-      }
-    }
-
-    setState(() {
-      isLoading = false;
-    });
-  }
-
-  Future<void> _pickImage() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery);
-    if (picked == null) return;
-
-    final uid = user!.uid;
-    final ref = FirebaseStorage.instance.ref().child('profile_images').child('$uid.jpg');
+  // Kullanıcı belgesini oluştur veya yükle
+  Future<void> _initializeUserDocument() async {
+    if (user == null) return;
 
     setState(() {
       isLoading = true;
     });
 
-    await ref.putFile(File(picked.path));
-    final url = await ref.getDownloadURL();
+    try {
+      final userDoc = FirebaseFirestore.instance.collection('users').doc(user!.uid);
 
-    setState(() {
-      profileImageUrl = url;
-      isLoading = false;
-    });
+      // Belge mevcut değilse oluştur
+      final docSnapshot = await userDoc.get();
+      if (!docSnapshot.exists) {
+        await userDoc.set({
+          'username': user!.email!.split('@')[0], // Varsayılan kullanıcı adı
+          'profileImageUrl': '', // Varsayılan boş
+          'email': user!.email,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      // Mevcut verileri yükle
+      await _loadCurrentData();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error initializing user data: $e')),
+      );
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
+    }
   }
 
-  Future<void> _saveChanges() async {
+  // Kullanıcı bilgilerini yükle
+  Future<void> _loadCurrentData() async {
     if (user == null) return;
-    final uid = user!.uid;
 
-    await FirebaseFirestore.instance.collection('users').doc(uid).update({
-      'username': usernameController.text.trim(),
-      if (profileImageUrl != null) 'profileImageUrl': profileImageUrl,
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(user!.uid).get();
+
+      if (doc.exists) {
+        final data = doc.data() as Map<String, dynamic>;
+        usernameController.text = data['username'] ?? '';
+        profileImageUrl = data['profileImageUrl'];
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error loading data: $e')),
+      );
+    }
+  }
+
+  // Profil fotoğrafı için yeni bir resim seç
+  Future<void> _pickAndUpdateProfileImage() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+
+    if (pickedFile == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No image selected.')),
+      );
+      return;
+    }
+
+    // Seçilen dosyayı yerel olarak kaydet
+    final file = File(pickedFile.path);
+    setState(() {
+      localImageFile = file;
+      profileImageUrl = file.path; // Seçilen dosyanın yolunu da güncelliyoruz
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Profile updated!')),
-    );
+    // Yerel dosya yolunu Firestore'a kaydet
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(user!.uid).update({
+        'profileImageUrl': file.path, // Yerel dosya yolu kaydediliyor
+      });
 
-    Navigator.pop(context); // Geri ProfileScreen'e dön
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile image updated successfully!')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error updating profile image: $e')),
+      );
+    }
+  }
+
+  // Kullanıcı bilgilerini Firestore'da kaydeder
+  Future<void> _saveChanges() async {
+    if (user == null) return;
+
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(user!.uid).update({
+        'username': usernameController.text.trim(),
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile updated successfully!')),
+      );
+
+      Navigator.pop(context);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error saving changes: $e')),
+      );
+    }
   }
 
   @override
@@ -95,20 +143,24 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16.0),
               child: SingleChildScrollView(
                 child: Column(
                   children: [
                     CircleAvatar(
                       radius: 50,
-                      backgroundImage: profileImageUrl != null
-                          ? NetworkImage(profileImageUrl!)
+                      backgroundImage: localImageFile != null
+                          ? FileImage(localImageFile!)
+                          : (profileImageUrl != null && profileImageUrl!.isNotEmpty
+                              ? FileImage(File(profileImageUrl!))
+                              : null),
+                      child: localImageFile == null && (profileImageUrl == null || profileImageUrl!.isEmpty)
+                          ? const Icon(Icons.person, size: 50)
                           : null,
-                      child: profileImageUrl == null ? const Icon(Icons.person, size: 50) : null,
                     ),
                     const SizedBox(height: 20),
                     ElevatedButton(
-                      onPressed: _pickImage,
+                      onPressed: _pickAndUpdateProfileImage,
                       child: const Text('Change Profile Image'),
                     ),
                     const SizedBox(height: 20),

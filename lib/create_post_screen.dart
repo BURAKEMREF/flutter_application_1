@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -42,22 +41,12 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
     try {
       final user = FirebaseAuth.instance.currentUser;
-      String? mediaUrl;
 
-      // Firebase Storage'a medya yükleme
-      final ref = FirebaseStorage.instance
-          .ref()
-          .child('post_media')
-          .child('${DateTime.now().millisecondsSinceEpoch}');
-      await ref.putFile(selectedMedia!);
-      mediaUrl = await ref.getDownloadURL();
-
-      // Firestore'a gönderiyi kaydetme
       await FirebaseFirestore.instance.collection('posts').add({
         'userId': user?.uid,
         'username': user?.email,
         'description': descriptionController.text.trim(),
-        'mediaUrl': mediaUrl,
+        'mediaPath': selectedMedia!.path,
         'timestamp': FieldValue.serverTimestamp(),
       });
 

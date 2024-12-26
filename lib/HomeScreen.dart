@@ -1,3 +1,4 @@
+import 'dart:io'; // File sınıfını kullanabilmek için eklendi
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -54,43 +55,6 @@ class HomeScreen extends StatelessWidget {
       ),
       body: Column(
         children: [
-          // Hikayeler (Stories) Bölümü
-          SizedBox(
-            height: 100,
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('stories').snapshots(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                final stories = snapshot.data!.docs;
-                return ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: stories.length,
-                  itemBuilder: (context, index) {
-                    final story = stories[index].data() as Map<String, dynamic>;
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                      child: Column(
-                        children: [
-                          CircleAvatar(
-                            radius: 35,
-                            backgroundImage: NetworkImage(story['imageUrl']),
-                          ),
-                          SizedBox(height: 5),
-                          Text(
-                            story['username'],
-                            style: TextStyle(fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-          Divider(thickness: 1, color: Colors.grey[300]),
           // Gönderiler Bölümü
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
@@ -113,18 +77,25 @@ class HomeScreen extends StatelessWidget {
                         // Gönderi Başlığı
                         ListTile(
                           leading: CircleAvatar(
-                            backgroundImage: NetworkImage(post['profileImage']),
+                            backgroundImage: post['profileImageUrl'] != null
+                                ? NetworkImage(post['profileImageUrl'])
+                                : null,
+                            child: post['profileImageUrl'] == null
+                                ? const Icon(Icons.person)
+                                : null,
                           ),
-                          title: Text(post['username']),
+                          title: Text(post['username'] ?? 'Unknown User'),
                           trailing: Icon(Icons.more_vert),
                         ),
                         // Gönderi Görseli
-                        Image.network(
-                          post['mediaUrl'],
-                          height: 300,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                        ),
+                        post['mediaPath'] != null
+                            ? Image.file(
+                                File(post['mediaPath']),
+                                height: 300,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                              )
+                            : const SizedBox.shrink(),
                         // Etkileşim Butonları
                         Row(
                           children: [
@@ -151,7 +122,7 @@ class HomeScreen extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(horizontal: 16.0),
                           child: Text(post['description'] ?? ''),
                         ),
-                        SizedBox(height: 10),
+                        const SizedBox(height: 10),
                       ],
                     );
                   },
