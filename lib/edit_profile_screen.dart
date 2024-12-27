@@ -17,6 +17,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String? profileImageUrl;
   File? localImageFile;
   bool isLoading = true;
+  bool isPickingImage = false; // ImagePicker durumu kontrolü için
 
   @override
   void initState() {
@@ -80,25 +81,31 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   // Profil fotoğrafı için yeni bir resim seç
   Future<void> _pickAndUpdateProfileImage() async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    if (isPickingImage) return; // Zaten işlemdeyse çık
 
-    if (pickedFile == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No image selected.')),
-      );
-      return;
-    }
-
-    // Seçilen dosyayı yerel olarak kaydet
-    final file = File(pickedFile.path);
     setState(() {
-      localImageFile = file;
-      profileImageUrl = file.path; // Seçilen dosyanın yolunu da güncelliyoruz
+      isPickingImage = true;
     });
 
-    // Yerel dosya yolunu Firestore'a kaydet
+    final picker = ImagePicker();
     try {
+      final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+
+      if (pickedFile == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No image selected.')),
+        );
+        return;
+      }
+
+      // Seçilen dosyayı yerel olarak kaydet
+      final file = File(pickedFile.path);
+      setState(() {
+        localImageFile = file;
+        profileImageUrl = file.path; // Seçilen dosyanın yolunu da güncelliyoruz
+      });
+
+      // Yerel dosya yolunu Firestore'a kaydet
       await FirebaseFirestore.instance.collection('users').doc(user!.uid).update({
         'profileImageUrl': file.path, // Yerel dosya yolu kaydediliyor
       });
@@ -110,6 +117,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error updating profile image: $e')),
       );
+    } finally {
+      setState(() {
+        isPickingImage = false;
+      });
     }
   }
 
