@@ -2,57 +2,50 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'edit_profile_screen.dart';
 
-class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({Key? key}) : super(key: key);
+class OtherProfileScreen extends StatefulWidget {
+  final String userId;
+
+  const OtherProfileScreen({Key? key, required this.userId}) : super(key: key);
 
   @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
+  State<OtherProfileScreen> createState() => _OtherProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
-  final User? user = FirebaseAuth.instance.currentUser;
+class _OtherProfileScreenState extends State<OtherProfileScreen> {
+  final User? currentUser = FirebaseAuth.instance.currentUser;
   String? username;
   String? profileImageUrl;
   int postCount = 0;
   int followersCount = 0;
   int followingCount = 0;
+  bool isFollowing = false;
   bool isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadUserData();
-    _loadFollowCounts();
+    _loadUserProfile();
+    _checkIfFollowing();
   }
 
-  Future<void> _loadUserData() async {
-    if (user == null) {
-      setState(() {
-        isLoading = false;
-      });
-      return;
-    }
-
+  Future<void> _loadUserProfile() async {
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user!.uid)
-          .get();
-
+      final doc = await FirebaseFirestore.instance.collection('users').doc(widget.userId).get();
       if (doc.exists) {
         final data = doc.data() as Map<String, dynamic>;
         setState(() {
           username = data['username'];
           profileImageUrl = data['profileImageUrl'];
           postCount = data['postCount'] ?? 0;
+          followersCount = data['followersCount'] ?? 0;
+          followingCount = data['followingCount'] ?? 0;
           isLoading = false;
         });
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error loading profile data: $e')),
+        SnackBar(content: Text('Error loading user profile: $e')),
       );
       setState(() {
         isLoading = false;
@@ -60,58 +53,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _loadFollowCounts() async {
-    if (user == null) return;
-
+  Future<void> _checkIfFollowing() async {
     try {
-      final followers = await getFollowersCount(user!.uid);
-      final following = await getFollowingCount(user!.uid);
+      final doc = await FirebaseFirestore.instance
+          .collection('followers')
+          .doc(widget.userId)
+          .collection('followersList')
+          .doc(currentUser?.uid)
+          .get();
 
       setState(() {
-        followersCount = followers;
-        followingCount = following;
+        isFollowing = doc.exists;
       });
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error loading follow counts: $e')),
+        SnackBar(content: Text('Error checking following status: $e')),
       );
     }
-  }
-
-  Future<int> getFollowersCount(String userId) async {
-    final followers = await FirebaseFirestore.instance
-        .collection('followers')
-        .doc(userId)
-        .collection('followersList')
-        .get();
-
-    return followers.docs.length;
-  }
-
-  Future<int> getFollowingCount(String userId) async {
-    final following = await FirebaseFirestore.instance
-        .collection('following')
-        .doc(userId)
-        .collection('followingList')
-        .get();
-
-    return following.docs.length;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Profile'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await FirebaseAuth.instance.signOut();
-              Navigator.popUntil(context, (route) => route.isFirst);
-            },
-          ),
-        ],
+        title: Text(username ?? 'Profile'),
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -148,17 +113,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               const SizedBox(height: 16),
                               ElevatedButton(
                                 onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => const EditProfileScreen(),
-                                    ),
-                                  ).then((_) {
-                                    _loadUserData();
-                                    _loadFollowCounts();
-                                  });
+                                  if (isFollowing) {
+                                    // Unfollow logic
+                                  } else {
+                                    // Follow logic
+                                  }
                                 },
-                                child: const Text('Edit Profile'),
+                                child: Text(isFollowing ? 'Unfollow' : 'Follow'),
                               ),
                             ],
                           ),
@@ -170,7 +131,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   StreamBuilder<QuerySnapshot>(
                     stream: FirebaseFirestore.instance
                         .collection('posts')
-                        .where('userId', isEqualTo: user?.uid)
+                        .where('userId', isEqualTo: widget.userId)
                         .snapshots(),
                     builder: (context, snapshot) {
                       if (!snapshot.hasData) {

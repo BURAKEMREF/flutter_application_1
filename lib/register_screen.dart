@@ -25,8 +25,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       // Kullanıcı Firestore'a kaydediliyor
       await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
+        'userId': userCredential.user!.uid, // Kullanıcının UID'si kaydediliyor
         'email': userCredential.user!.email,
         'username': usernameController.text.trim(),
+        'profileImageUrl': '', // Varsayılan profil resmi URL'si boş
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
