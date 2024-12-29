@@ -141,17 +141,12 @@ class HomeScreen extends StatelessWidget {
                   itemBuilder: (context, index) {
                     final post = posts[index].data() as Map<String, dynamic>;
 
-                    final String userId = post['userId'] ?? '';
-                    final String postId = post['postId'] ?? '';
+                    final String userId = post['userId'] ?? 'Unknown User';
+                    final String postId = posts[index].id;
                     final String profileImageUrl = post['profileImageUrl'] ?? '';
                     final String username = post['username'] ?? 'Unknown User';
                     final String description = post['description'] ?? '';
                     final String mediaPath = post['mediaPath'] ?? '';
-
-                    if (userId.isEmpty || postId.isEmpty) {
-                      debugPrint('Skipping post: Invalid data.');
-                      return const SizedBox.shrink();
-                    }
 
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -179,13 +174,23 @@ class HomeScreen extends StatelessWidget {
                           trailing: const Icon(Icons.more_vert),
                         ),
                         mediaPath.isNotEmpty
-                            ? Image.network(
-                                mediaPath,
-                                height: 300,
-                                width: double.infinity,
-                                fit: BoxFit.cover,
-                              )
-                            : const SizedBox.shrink(),
+                            ? (mediaPath.startsWith('http')
+                                ? Image.network(
+                                    mediaPath,
+                                    height: 300,
+                                    width: double.infinity,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return const Icon(Icons.broken_image, size: 100);
+                                    },
+                                  )
+                                : Image.file(
+                                    File(mediaPath),
+                                    height: 300,
+                                    width: double.infinity,
+                                    fit: BoxFit.cover,
+                                  ))
+                            : const Icon(Icons.image_not_supported, size: 100),
                         Row(
                           children: [
                             IconButton(

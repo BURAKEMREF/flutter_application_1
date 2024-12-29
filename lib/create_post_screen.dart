@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:uuid/uuid.dart'; // postId oluşturmak için
 
 class CreatePostScreen extends StatefulWidget {
   const CreatePostScreen({Key? key}) : super(key: key);
@@ -41,12 +42,14 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
     try {
       final user = FirebaseAuth.instance.currentUser;
+      final postId = const Uuid().v4(); // Benzersiz postId oluştur
 
-      await FirebaseFirestore.instance.collection('posts').add({
+      await FirebaseFirestore.instance.collection('posts').doc(postId).set({
+        'postId': postId,
         'userId': user?.uid,
         'username': user?.email,
         'description': descriptionController.text.trim(),
-        'mediaPath': selectedMedia!.path,
+        'mediaPath': selectedMedia!.path, // Yerel dosya yolu kaydediliyor
         'timestamp': FieldValue.serverTimestamp(),
       });
 
