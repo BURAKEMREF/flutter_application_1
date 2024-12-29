@@ -4,10 +4,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'create_post_screen.dart';
 import 'profile_screen.dart';
-import 'search_user_screen.dart'; // Arama ekranı dosyasını ekledik
-import 'other_profile_screen.dart'; // Diğer profil ekranını ekledik
-import 'match_screen.dart'; // Tinder benzeri eşleşme ekranını ekledik
-import 'notifications_screen.dart'; // Bildirim ekranını ekledik
+import 'search_user_screen.dart';
+import 'other_profile_screen.dart';
+import 'match_screen.dart';
+import 'notifications_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final String? userEmail;
@@ -17,12 +17,10 @@ class HomeScreen extends StatelessWidget {
   Future<void> likePost(String postOwnerId, String postId) async {
     final currentUserId = FirebaseAuth.instance.currentUser?.uid;
 
-    // Beğenme işlemi
     await FirebaseFirestore.instance.collection('posts').doc(postId).update({
       'likes': FieldValue.arrayUnion([currentUserId])
     });
 
-    // Bildirim gönderme
     if (postOwnerId != currentUserId) {
       await FirebaseFirestore.instance
           .collection('notifications')
@@ -40,7 +38,6 @@ class HomeScreen extends StatelessWidget {
   Future<void> addComment(String postOwnerId, String postId, String comment) async {
     final currentUserId = FirebaseAuth.instance.currentUser?.uid;
 
-    // Yorum ekleme işlemi
     await FirebaseFirestore.instance
         .collection('posts')
         .doc(postId)
@@ -51,7 +48,6 @@ class HomeScreen extends StatelessWidget {
       'timestamp': FieldValue.serverTimestamp(),
     });
 
-    // Bildirim gönderme
     if (postOwnerId != currentUserId) {
       await FirebaseFirestore.instance
           .collection('notifications')
@@ -74,17 +70,17 @@ class HomeScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        title: Text(
+        title: const Text(
           'Instagram',
           style: TextStyle(
-            fontFamily: 'Billabong', // Instagram tarzı font kullanabilirsiniz
+            fontFamily: 'Billabong',
             fontSize: 32,
             color: Colors.black,
           ),
         ),
         actions: [
           IconButton(
-            icon: Icon(Icons.add_box_outlined, color: Colors.black),
+            icon: const Icon(Icons.add_box_outlined, color: Colors.black),
             onPressed: () {
               Navigator.push(
                 context,
@@ -93,7 +89,7 @@ class HomeScreen extends StatelessWidget {
             },
           ),
           IconButton(
-            icon: Icon(Icons.favorite_border, color: Colors.black),
+            icon: const Icon(Icons.favorite_border, color: Colors.black),
             onPressed: () {
               Navigator.push(
                 context,
@@ -102,7 +98,7 @@ class HomeScreen extends StatelessWidget {
             },
           ),
           IconButton(
-            icon: Icon(Icons.search, color: Colors.black), // Arama butonu
+            icon: const Icon(Icons.search, color: Colors.black),
             onPressed: () {
               Navigator.push(
                 context,
@@ -111,7 +107,7 @@ class HomeScreen extends StatelessWidget {
             },
           ),
           IconButton(
-            icon: Icon(Icons.person, color: Colors.black), // Profil bağlantısı
+            icon: const Icon(Icons.person, color: Colors.black),
             onPressed: () {
               Navigator.push(
                 context,
@@ -123,7 +119,6 @@ class HomeScreen extends StatelessWidget {
       ),
       body: Column(
         children: [
-          // Gönderiler Bölümü
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -146,7 +141,6 @@ class HomeScreen extends StatelessWidget {
                   itemBuilder: (context, index) {
                     final post = posts[index].data() as Map<String, dynamic>;
 
-                    // Null kontrolü ve varsayılan değerler
                     final String userId = post['userId'] ?? '';
                     final String postId = post['postId'] ?? '';
                     final String profileImageUrl = post['profileImageUrl'] ?? '';
@@ -155,7 +149,8 @@ class HomeScreen extends StatelessWidget {
                     final String mediaPath = post['mediaPath'] ?? '';
 
                     if (userId.isEmpty || postId.isEmpty) {
-                      return const SizedBox.shrink(); // Geçersiz veriyi atla
+                      debugPrint('Skipping post: Invalid data.');
+                      return const SizedBox.shrink();
                     }
 
                     return Column(
@@ -183,16 +178,14 @@ class HomeScreen extends StatelessWidget {
                           title: Text(username),
                           trailing: const Icon(Icons.more_vert),
                         ),
-                        // Gönderi Görseli
                         mediaPath.isNotEmpty
-                            ? Image.file(
-                                File(mediaPath),
+                            ? Image.network(
+                                mediaPath,
                                 height: 300,
                                 width: double.infinity,
                                 fit: BoxFit.cover,
                               )
                             : const SizedBox.shrink(),
-                        // Etkileşim Butonları
                         Row(
                           children: [
                             IconButton(
@@ -204,7 +197,7 @@ class HomeScreen extends StatelessWidget {
                             IconButton(
                               icon: const Icon(Icons.comment_outlined),
                               onPressed: () {
-                                addComment(userId, postId, 'Sample Comment');
+                                addComment(userId, postId, 'Great photo!');
                               },
                             ),
                             const Spacer(),
@@ -239,33 +232,29 @@ class HomeScreen extends StatelessWidget {
             label: '',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.local_fire_department), // Tinder eşleşme ikonu
-            label: '',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.shopping_bag_outlined), // Market sekmesi kaldırıldı
+            icon: Icon(Icons.local_fire_department),
             label: '',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person),
-            label: '', // Profil sekmesi
+            label: '',
           ),
         ],
         type: BottomNavigationBarType.fixed,
         onTap: (index) {
-          if (index == 1) { // Arama sekmesi
+          if (index == 1) {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const SearchUserScreen()),
             );
           }
-          if (index == 2) { // Eşleşme sekmesi
+          if (index == 2) {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => MatchScreen(currentUserId: user?.uid)),
             );
           }
-          if (index == 4) {
+          if (index == 3) {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const ProfileScreen()),
