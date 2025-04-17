@@ -25,7 +25,7 @@ dependencies:
 
   # Benzersiz ID üretimi için
   uuid: ^3.0.6
-
+  video_player: ^2.7.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -35,4 +35,4 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/default_profile.png  # Varsayılan profil resmi eklemeyi unutma
+    - assets/default_profile.png  # Varsayılan profil resmi

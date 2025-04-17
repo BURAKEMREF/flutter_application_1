@@ -14,37 +14,35 @@ class CreateStoryScreen extends StatefulWidget {
 }
 
 class _CreateStoryScreenState extends State<CreateStoryScreen> {
-  File? selectedMedia;
-  bool isLoading = false;
+  File? _mediaFile;
+  final TextEditingController _textController = TextEditingController();
+  bool _isUploading = false;
 
   Future<void> _pickMedia() async {
     final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    final picked = await picker.pickImage(source: ImageSource.gallery);
 
-    if (pickedFile != null) {
+    if (picked != null) {
       setState(() {
-        selectedMedia = File(pickedFile.path);
+        _mediaFile = File(picked.path);
       });
     }
   }
 
   Future<void> _uploadStory() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null || selectedMedia == null) return;
-
-    setState(() {
-      isLoading = true;
-    });
+    if (_mediaFile == null) return;
+    setState(() => _isUploading = true);
 
     try {
+      final user = FirebaseAuth.instance.currentUser;
       final storyId = const Uuid().v4();
       final ref = FirebaseStorage.instance
           .ref()
           .child('stories')
-          .child(user.uid)
+          .child(user!.uid)
           .child('$storyId.jpg');
 
-      await ref.putFile(selectedMedia!);
+      await ref.putFile(_mediaFile!);
       final mediaUrl = await ref.getDownloadURL();
 
       await FirebaseFirestore.instance
@@ -54,23 +52,20 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
           .doc(storyId)
           .set({
         'mediaUrl': mediaUrl,
+        'text': _textController.text.trim(),
         'timestamp': FieldValue.serverTimestamp(),
-        'userId': user.uid,
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Story uploaded!')),
       );
-
       Navigator.pop(context);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e')),
       );
     } finally {
-      setState(() {
-        isLoading = false;
-      });
+      setState(() => _isUploading = false);
     }
   }
 
@@ -78,27 +73,37 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Create Story')),
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  if (selectedMedia != null)
-                    Image.file(selectedMedia!, height: 300, fit: BoxFit.cover),
-                  const SizedBox(height: 20),
-                  ElevatedButton(
-                    onPressed: _pickMedia,
-                    child: const Text('Select Media'),
-                  ),
-                  const SizedBox(height: 20),
-                  ElevatedButton(
-                    onPressed: _uploadStory,
-                    child: const Text('Upload Story'),
-                  ),
-                ],
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              if (_mediaFile != null)
+                Image.file(_mediaFile!, height: 250, fit: BoxFit.cover),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _pickMedia,
+                child: const Text('Select Media'),
               ),
-            ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _textController,
+                decoration: const InputDecoration(
+                  labelText: 'Text / Emoji (optional)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _isUploading ? null : _uploadStory,
+                child: _isUploading
+                    ? const CircularProgressIndicator()
+                    : const Text('Share Story'),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

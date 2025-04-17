@@ -18,11 +18,11 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Instagram Clone',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-      ),
-      home: const LoginScreen(),
+     title: 'Instagram Clone',
+  theme: ThemeData.light(), // Açık tema
+  darkTheme: ThemeData.dark(), // Karanlık tema
+  themeMode: ThemeMode.system, // Cihaz temasına göre otomatik geçiş
+  home: const LoginScreen(),
     );
   }
 }

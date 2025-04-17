@@ -7,6 +7,9 @@ import 'search_user_screen.dart';
 import 'match_screen.dart';
 import 'notifications_screen.dart';
 import 'post_widget.dart';
+import 'story_bar.dart'; // 👈 Yeni eklenen story bar import
+import 'chat_screen.dart';
+import 'chat_list_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final String? userEmail;
@@ -30,6 +33,15 @@ class HomeScreen extends StatelessWidget {
           ),
         ),
         actions: [
+          IconButton(
+  icon: const Icon(Icons.message),
+  onPressed: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ChatListScreen()),
+    );
+  },
+),
           IconButton(
             icon: const Icon(Icons.add_box_outlined, color: Colors.black),
             onPressed: () {
@@ -70,6 +82,7 @@ class HomeScreen extends StatelessWidget {
       ),
       body: Column(
         children: [
+          const StoryBar(), // 👈 Story bar en üste eklendi
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
