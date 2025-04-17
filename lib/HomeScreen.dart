@@ -4,62 +4,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'create_post_screen.dart';
 import 'profile_screen.dart';
 import 'search_user_screen.dart';
-import 'other_profile_screen.dart';
 import 'match_screen.dart';
 import 'notifications_screen.dart';
+import 'post_widget.dart';
 
 class HomeScreen extends StatelessWidget {
   final String? userEmail;
 
   const HomeScreen({Key? key, this.userEmail}) : super(key: key);
-
-  Future<void> likePost(String postOwnerId, String postId) async {
-    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-
-    await FirebaseFirestore.instance.collection('posts').doc(postId).update({
-      'likes': FieldValue.arrayUnion([currentUserId])
-    });
-
-    if (postOwnerId != currentUserId) {
-      await FirebaseFirestore.instance
-          .collection('notifications')
-          .doc(postOwnerId)
-          .collection('userNotifications')
-          .add({
-        'type': 'like',
-        'senderId': currentUserId,
-        'postId': postId,
-        'timestamp': FieldValue.serverTimestamp(),
-      });
-    }
-  }
-
-  Future<void> addComment(String postOwnerId, String postId, String comment) async {
-    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-
-    await FirebaseFirestore.instance
-        .collection('posts')
-        .doc(postId)
-        .collection('comments')
-        .add({
-      'userId': currentUserId,
-      'comment': comment,
-      'timestamp': FieldValue.serverTimestamp(),
-    });
-
-    if (postOwnerId != currentUserId) {
-      await FirebaseFirestore.instance
-          .collection('notifications')
-          .doc(postOwnerId)
-          .collection('userNotifications')
-          .add({
-        'type': 'comment',
-        'senderId': currentUserId,
-        'postId': postId,
-        'timestamp': FieldValue.serverTimestamp(),
-      });
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -138,79 +90,10 @@ class HomeScreen extends StatelessWidget {
                 return ListView.builder(
                   itemCount: posts.length,
                   itemBuilder: (context, index) {
-                    final post = posts[index].data() as Map<String, dynamic>;
+                    final postData = posts[index].data() as Map<String, dynamic>;
+                    final postId = posts[index].id;
 
-                    final String userId = post['userId'] ?? 'Unknown User';
-                    final String postId = posts[index].id;
-                    final String profileImageUrl = post['profileImageUrl'] ?? '';
-                    final String username = post['username'] ?? 'Unknown User';
-                    final String description = post['description'] ?? '';
-                    final String mediaUrl = post['mediaUrl'] ?? '';
-
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        ListTile(
-                          leading: GestureDetector(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => OtherProfileScreen(userId: userId),
-                                ),
-                              );
-                            },
-                            child: CircleAvatar(
-                              backgroundImage: profileImageUrl.isNotEmpty
-                                  ? NetworkImage(profileImageUrl)
-                                  : null,
-                              child: profileImageUrl.isEmpty
-                                  ? const Icon(Icons.person)
-                                  : null,
-                            ),
-                          ),
-                          title: Text(username),
-                          trailing: const Icon(Icons.more_vert),
-                        ),
-                        mediaUrl.isNotEmpty
-                            ? Image.network(
-                                mediaUrl,
-                                height: 300,
-                                width: double.infinity,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return const Icon(Icons.broken_image, size: 100);
-                                },
-                              )
-                            : const Icon(Icons.image_not_supported, size: 100),
-                        Row(
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.favorite_border),
-                              onPressed: () {
-                                likePost(userId, postId);
-                              },
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.comment_outlined),
-                              onPressed: () {
-                                addComment(userId, postId, 'Great photo!');
-                              },
-                            ),
-                            const Spacer(),
-                            IconButton(
-                              icon: const Icon(Icons.bookmark_border),
-                              onPressed: () {},
-                            ),
-                          ],
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                          child: Text(description),
-                        ),
-                        const SizedBox(height: 10),
-                      ],
-                    );
+                    return PostWidget(postData: postData, postId: postId);
                   },
                 );
               },
@@ -220,22 +103,10 @@ class HomeScreen extends StatelessWidget {
       ),
       bottomNavigationBar: BottomNavigationBar(
         items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: '',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.search),
-            label: '',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.local_fire_department),
-            label: '',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: '',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: ''),
+          BottomNavigationBarItem(icon: Icon(Icons.search), label: ''),
+          BottomNavigationBarItem(icon: Icon(Icons.local_fire_department), label: ''),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: ''),
         ],
         type: BottomNavigationBarType.fixed,
         onTap: (index) {
@@ -244,14 +115,12 @@ class HomeScreen extends StatelessWidget {
               context,
               MaterialPageRoute(builder: (context) => const SearchUserScreen()),
             );
-          }
-          if (index == 2) {
+          } else if (index == 2) {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => MatchScreen(currentUserId: user?.uid)),
             );
-          }
-          if (index == 3) {
+          } else if (index == 3) {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const ProfileScreen()),
