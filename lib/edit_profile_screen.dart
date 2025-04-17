@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({Key? key}) : super(key: key);
@@ -17,7 +18,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String? profileImageUrl;
   File? localImageFile;
   bool isLoading = true;
-  bool isPickingImage = false; // ImagePicker durumu kontrolü için
+  bool isPickingImage = false;
 
   @override
   void initState() {
@@ -25,42 +26,34 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _initializeUserDocument();
   }
 
-  // Kullanıcı belgesini oluştur veya yükle
   Future<void> _initializeUserDocument() async {
     if (user == null) return;
 
-    setState(() {
-      isLoading = true;
-    });
+    setState(() => isLoading = true);
 
     try {
       final userDoc = FirebaseFirestore.instance.collection('users').doc(user!.uid);
 
-      // Belge mevcut değilse oluştur
       final docSnapshot = await userDoc.get();
       if (!docSnapshot.exists) {
         await userDoc.set({
-          'username': user!.email!.split('@')[0], // Varsayılan kullanıcı adı
-          'profileImageUrl': '', // Varsayılan boş
+          'username': user!.email!.split('@')[0],
+          'profileImageUrl': '',
           'email': user!.email,
           'createdAt': FieldValue.serverTimestamp(),
         });
       }
 
-      // Mevcut verileri yükle
       await _loadCurrentData();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error initializing user data: $e')),
       );
     } finally {
-      setState(() {
-        isLoading = false;
-      });
+      setState(() => isLoading = false);
     }
   }
 
-  // Kullanıcı bilgilerini yükle
   Future<void> _loadCurrentData() async {
     if (user == null) return;
 
@@ -79,13 +72,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
-  // Profil fotoğrafı için yeni bir resim seç
   Future<void> _pickAndUpdateProfileImage() async {
-    if (isPickingImage) return; // Zaten işlemdeyse çık
+    if (isPickingImage) return;
 
-    setState(() {
-      isPickingImage = true;
-    });
+    setState(() => isPickingImage = true);
 
     final picker = ImagePicker();
     try {
@@ -98,17 +88,23 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         return;
       }
 
-      // Seçilen dosyayı yerel olarak kaydet
       final file = File(pickedFile.path);
+      final storageRef = FirebaseStorage.instance
+          .ref()
+          .child('profile_images/${user!.uid}.jpg');
+
+      await storageRef.putFile(file);
+      final downloadUrl = await storageRef.getDownloadURL();
+
       setState(() {
         localImageFile = file;
-        profileImageUrl = file.path; // Seçilen dosyanın yolunu da güncelliyoruz
+        profileImageUrl = downloadUrl;
       });
 
-      // Yerel dosya yolunu Firestore'a kaydet
-      await FirebaseFirestore.instance.collection('users').doc(user!.uid).update({
-        'profileImageUrl': file.path, // Yerel dosya yolu kaydediliyor
-      });
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user!.uid)
+          .update({'profileImageUrl': downloadUrl});
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Profile image updated successfully!')),
@@ -118,13 +114,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         SnackBar(content: Text('Error updating profile image: $e')),
       );
     } finally {
-      setState(() {
-        isPickingImage = false;
-      });
+      setState(() => isPickingImage = false);
     }
   }
 
-  // Kullanıcı bilgilerini Firestore'da kaydeder
   Future<void> _saveChanges() async {
     if (user == null) return;
 
@@ -163,9 +156,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       backgroundImage: localImageFile != null
                           ? FileImage(localImageFile!)
                           : (profileImageUrl != null && profileImageUrl!.isNotEmpty
-                              ? FileImage(File(profileImageUrl!))
+                              ? NetworkImage(profileImageUrl!) as ImageProvider
                               : null),
-                      child: localImageFile == null && (profileImageUrl == null || profileImageUrl!.isEmpty)
+                      child: localImageFile == null &&
+                              (profileImageUrl == null || profileImageUrl!.isEmpty)
                           ? const Icon(Icons.person, size: 50)
                           : null,
                     ),

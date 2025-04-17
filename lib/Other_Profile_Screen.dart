@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -89,12 +88,10 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
                       children: [
                         CircleAvatar(
                           radius: 50,
-                          backgroundImage: profileImageUrl != null && profileImageUrl!.isNotEmpty
-                              ? (Uri.tryParse(profileImageUrl!)?.isAbsolute == true
-                                  ? NetworkImage(profileImageUrl!)
-                                  : FileImage(File(profileImageUrl!))) as ImageProvider
-                              : const AssetImage('assets/default_profile.png'),
-                          child: profileImageUrl == null || profileImageUrl!.isEmpty
+                          backgroundImage: (profileImageUrl != null && profileImageUrl!.isNotEmpty)
+                              ? NetworkImage(profileImageUrl!)
+                              : null,
+                          child: (profileImageUrl == null || profileImageUrl!.isEmpty)
                               ? const Icon(Icons.person, size: 50)
                               : null,
                         ),
@@ -158,33 +155,18 @@ class _OtherProfileScreenState extends State<OtherProfileScreen> {
                         itemCount: posts.length,
                         itemBuilder: (context, index) {
                           final post = posts[index].data() as Map<String, dynamic>;
-                          final mediaPath = post['mediaPath'] ?? '';
-                          try {
-                            if (Uri.tryParse(mediaPath)?.isAbsolute == true) {
-                              return Image.network(
-                                mediaPath,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) {
-                                  debugPrint('Error loading network image: $error');
-                                  return const Icon(Icons.error);
-                                },
-                              );
-                            } else if (File(mediaPath).existsSync()) {
-                              return Image.file(
-                                File(mediaPath),
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) {
-                                  debugPrint('Error loading file image: $error');
-                                  return const Icon(Icons.error);
-                                },
-                              );
-                            } else {
-                              return const Icon(Icons.error);
-                            }
-                          } catch (e) {
-                            debugPrint('Error loading image: $e');
-                            return const Icon(Icons.error);
-                          }
+                          final mediaUrl = post['mediaUrl'] ?? '';
+
+                          return mediaUrl.isNotEmpty
+                              ? Image.network(
+                                  mediaUrl,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    debugPrint('Error loading image: $error');
+                                    return const Icon(Icons.error);
+                                  },
+                                )
+                              : const Icon(Icons.image_not_supported);
                         },
                       );
                     },

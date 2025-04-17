@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:uuid/uuid.dart'; // postId oluşturmak için
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:uuid/uuid.dart';
 
 class CreatePostScreen extends StatefulWidget {
   const CreatePostScreen({Key? key}) : super(key: key);
@@ -28,6 +29,12 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     }
   }
 
+  Future<String> _uploadToStorage(File file, String userId, String postId) async {
+    final ref = FirebaseStorage.instance.ref().child('posts/$userId/$postId.jpg');
+    final uploadTask = await ref.putFile(file);
+    return await uploadTask.ref.getDownloadURL();
+  }
+
   Future<void> _uploadPost() async {
     if (selectedMedia == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -36,20 +43,24 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       return;
     }
 
-    setState(() {
-      isLoading = true;
-    });
+    setState(() => isLoading = true);
 
     try {
       final user = FirebaseAuth.instance.currentUser;
-      final postId = const Uuid().v4(); // Benzersiz postId oluştur
+      if (user == null) return;
 
+      final postId = const Uuid().v4();
+
+      // Storage'a yükle ve URL'yi al
+      final mediaUrl = await _uploadToStorage(selectedMedia!, user.uid, postId);
+
+      // Firestore'a post verisini kaydet
       await FirebaseFirestore.instance.collection('posts').doc(postId).set({
         'postId': postId,
-        'userId': user?.uid,
-        'username': user?.email,
+        'userId': user.uid,
+        'username': user.email,
         'description': descriptionController.text.trim(),
-        'mediaPath': selectedMedia!.path, // Yerel dosya yolu kaydediliyor
+        'mediaUrl': mediaUrl, // Storage linki
         'timestamp': FieldValue.serverTimestamp(),
       });
 
@@ -62,11 +73,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error sharing post: $e')),
       );
+    } finally {
+      setState(() => isLoading = false);
     }
-
-    setState(() {
-      isLoading = false;
-    });
   }
 
   @override

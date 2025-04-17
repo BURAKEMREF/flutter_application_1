@@ -1,4 +1,3 @@
-import 'dart:io'; // File sınıfını kullanabilmek için eklendi
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -146,7 +145,7 @@ class HomeScreen extends StatelessWidget {
                     final String profileImageUrl = post['profileImageUrl'] ?? '';
                     final String username = post['username'] ?? 'Unknown User';
                     final String description = post['description'] ?? '';
-                    final String mediaPath = post['mediaPath'] ?? '';
+                    final String mediaUrl = post['mediaUrl'] ?? '';
 
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -173,23 +172,16 @@ class HomeScreen extends StatelessWidget {
                           title: Text(username),
                           trailing: const Icon(Icons.more_vert),
                         ),
-                        mediaPath.isNotEmpty
-                            ? (mediaPath.startsWith('http')
-                                ? Image.network(
-                                    mediaPath,
-                                    height: 300,
-                                    width: double.infinity,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return const Icon(Icons.broken_image, size: 100);
-                                    },
-                                  )
-                                : Image.file(
-                                    File(mediaPath),
-                                    height: 300,
-                                    width: double.infinity,
-                                    fit: BoxFit.cover,
-                                  ))
+                        mediaUrl.isNotEmpty
+                            ? Image.network(
+                                mediaUrl,
+                                height: 300,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return const Icon(Icons.broken_image, size: 100);
+                                },
+                              )
                             : const Icon(Icons.image_not_supported, size: 100),
                         Row(
                           children: [
