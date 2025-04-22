@@ -22,6 +22,19 @@ class _PostWidgetState extends State<PostWidget> {
     await FirebaseFirestore.instance.collection('posts').doc(widget.postId).update({
       'likes': FieldValue.arrayUnion([currentUserId])
     });
+
+    if (postOwnerId != currentUserId) {
+      await FirebaseFirestore.instance
+          .collection('notifications')
+          .doc(postOwnerId)
+          .collection('userNotifications')
+          .add({
+        'type': 'like',
+        'senderId': currentUserId,
+        'postId': widget.postId,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+    }
   }
 
   Future<void> addComment(String postOwnerId, String comment) async {
@@ -36,6 +49,19 @@ class _PostWidgetState extends State<PostWidget> {
       'comment': comment,
       'createdAt': FieldValue.serverTimestamp(),
     });
+
+    if (postOwnerId != currentUserId) {
+      await FirebaseFirestore.instance
+          .collection('notifications')
+          .doc(postOwnerId)
+          .collection('userNotifications')
+          .add({
+        'type': 'comment',
+        'senderId': currentUserId,
+        'postId': widget.postId,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+    }
 
     _commentController.clear();
   }
@@ -66,7 +92,7 @@ class _PostWidgetState extends State<PostWidget> {
               padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4),
               child: Row(
                 children: [
-                  const Icon(Icons.comment, size: 18),
+                  const Icon(Icons.comment, size: 18, color: Colors.grey),
                   const SizedBox(width: 8),
                   Expanded(child: Text('$userId: $comment')),
                 ],
@@ -88,42 +114,49 @@ class _PostWidgetState extends State<PostWidget> {
     final int likeCount = (widget.postData['likes'] as List?)?.length ?? 0;
 
     return Card(
-      margin: const EdgeInsets.all(12),
-      elevation: 5,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Profil alanı
           ListTile(
             leading: GestureDetector(
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => OtherProfileScreen(userId: userId)),
+                  MaterialPageRoute(builder: (_) => OtherProfileScreen(userId: userId)),
                 );
               },
               child: CircleAvatar(
-                backgroundImage: profileImageUrl.isNotEmpty
-                    ? NetworkImage(profileImageUrl)
-                    : null,
+                backgroundImage:
+                    profileImageUrl.isNotEmpty ? NetworkImage(profileImageUrl) : null,
                 child: profileImageUrl.isEmpty ? const Icon(Icons.person) : null,
               ),
             ),
-            title: Text(username),
+            title: Text(username, style: const TextStyle(fontWeight: FontWeight.bold)),
             trailing: const Icon(Icons.more_vert),
           ),
+
+          // Medya
           mediaUrl.isNotEmpty
-              ? Image.network(
-                  mediaUrl,
-                  height: 300,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) =>
-                      const Icon(Icons.broken_image, size: 100),
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.network(
+                    mediaUrl,
+                    height: 300,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) =>
+                        const Icon(Icons.broken_image, size: 100),
+                  ),
                 )
               : const Icon(Icons.image_not_supported, size: 100),
+
+          // Beğeni ve yorum ikonları
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            padding: const EdgeInsets.only(top: 8, left: 12, right: 12),
             child: Row(
               children: [
                 IconButton(
@@ -142,16 +175,25 @@ class _PostWidgetState extends State<PostWidget> {
               ],
             ),
           ),
+
+          // Beğeni sayısı
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Text('$likeCount likes', style: const TextStyle(fontWeight: FontWeight.bold)),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              '$likeCount likes',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
+
+          // Açıklama
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             child: Text(description),
           ),
+
+          // Yorum yazma kutusu
           Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(12),
             child: Row(
               children: [
                 Expanded(
@@ -160,6 +202,7 @@ class _PostWidgetState extends State<PostWidget> {
                     decoration: const InputDecoration(
                       hintText: 'Write a comment...',
                       border: OutlineInputBorder(),
+                      isDense: true,
                     ),
                   ),
                 ),
@@ -175,7 +218,9 @@ class _PostWidgetState extends State<PostWidget> {
               ],
             ),
           ),
+
           buildCommentList(),
+          const SizedBox(height: 8),
         ],
       ),
     );

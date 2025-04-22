@@ -6,20 +6,37 @@ import 'profile_screen.dart';
 import 'search_user_screen.dart';
 import 'match_screen.dart';
 import 'notifications_screen.dart';
-import 'post_widget.dart';
-import 'story_bar.dart'; // 👈 Yeni eklenen story bar import
-import 'chat_screen.dart';
+import 'story_bar.dart';
 import 'chat_list_screen.dart';
+import 'post_widget.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   final String? userEmail;
-
   const HomeScreen({Key? key, this.userEmail}) : super(key: key);
 
   @override
-  Widget build(BuildContext context) {
-    final User? user = FirebaseAuth.instance.currentUser;
+  State<HomeScreen> createState() => _HomeScreenState();
+}
 
+class _HomeScreenState extends State<HomeScreen> {
+  final User? user = FirebaseAuth.instance.currentUser;
+  int currentIndex = 0;
+
+  final List<Widget> _screens = [
+    const _FeedView(), // sadece postları içeriyor
+    const SearchUserScreen(),
+    MatchScreen(),
+    const ProfileScreen(),
+  ];
+
+  void _onTabTapped(int index) {
+    setState(() {
+      currentIndex = index;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.white,
@@ -34,20 +51,20 @@ class HomeScreen extends StatelessWidget {
         ),
         actions: [
           IconButton(
-  icon: const Icon(Icons.message),
-  onPressed: () {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const ChatListScreen()),
-    );
-  },
-),
+            icon: const Icon(Icons.message),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ChatListScreen()),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.add_box_outlined, color: Colors.black),
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const CreatePostScreen()),
+                MaterialPageRoute(builder: (_) => const CreatePostScreen()),
               );
             },
           ),
@@ -56,65 +73,18 @@ class HomeScreen extends StatelessWidget {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => NotificationsScreen()),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.search, color: Colors.black),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const SearchUserScreen()),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.person, color: Colors.black),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const ProfileScreen()),
+                MaterialPageRoute(builder: (_) => NotificationsScreen()),
               );
             },
           ),
         ],
       ),
-      body: Column(
-        children: [
-          const StoryBar(), // 👈 Story bar en üste eklendi
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('posts')
-                  .orderBy('timestamp', descending: true)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                final posts = snapshot.data!.docs;
-
-                if (posts.isEmpty) {
-                  return const Center(child: Text('No posts available.'));
-                }
-
-                return ListView.builder(
-                  itemCount: posts.length,
-                  itemBuilder: (context, index) {
-                    final postData = posts[index].data() as Map<String, dynamic>;
-                    final postId = posts[index].id;
-
-                    return PostWidget(postData: postData, postId: postId);
-                  },
-                );
-              },
-            ),
-          ),
-        ],
-      ),
+      body: currentIndex == 0
+          ? const _FeedView()
+          : _screens[currentIndex], // index 0 özeldir (feedView)
       bottomNavigationBar: BottomNavigationBar(
+        currentIndex: currentIndex,
+        onTap: _onTabTapped,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: ''),
           BottomNavigationBarItem(icon: Icon(Icons.search), label: ''),
@@ -122,25 +92,48 @@ class HomeScreen extends StatelessWidget {
           BottomNavigationBarItem(icon: Icon(Icons.person), label: ''),
         ],
         type: BottomNavigationBarType.fixed,
-        onTap: (index) {
-          if (index == 1) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const SearchUserScreen()),
-            );
-          } else if (index == 2) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => MatchScreen(currentUserId: user?.uid)),
-            );
-          } else if (index == 3) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const ProfileScreen()),
-            );
-          }
-        },
       ),
+    );
+  }
+}
+
+/// Post akışı ayrı widget olarak tanımlandı
+class _FeedView extends StatelessWidget {
+  const _FeedView({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        const StoryBar(),
+        Expanded(
+          child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('posts')
+                .orderBy('timestamp', descending: true)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              final posts = snapshot.data!.docs;
+              if (posts.isEmpty) {
+                return const Center(child: Text('No posts available.'));
+              }
+
+              return ListView.builder(
+                itemCount: posts.length,
+                itemBuilder: (context, index) {
+                  final postData = posts[index].data() as Map<String, dynamic>;
+                  final postId = posts[index].id;
+                  return PostWidget(postData: postData, postId: postId);
+                },
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }

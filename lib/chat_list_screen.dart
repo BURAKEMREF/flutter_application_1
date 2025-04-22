@@ -1,78 +1,83 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'chat_screen.dart';
 
-class ChatListScreen extends StatefulWidget {
+class ChatListScreen extends StatelessWidget {
   const ChatListScreen({super.key});
 
   @override
-  State<ChatListScreen> createState() => _ChatListScreenState();
-}
-
-class _ChatListScreenState extends State<ChatListScreen> {
-  final currentUser = FirebaseAuth.instance.currentUser;
-  final TextEditingController searchController = TextEditingController();
-  List<Map<String, dynamic>> searchResults = [];
-
-  Future<void> searchUsers(String query) async {
-    final result = await FirebaseFirestore.instance
-        .collection('users')
-        .where('username', isGreaterThanOrEqualTo: query)
-        .where('username', isLessThanOrEqualTo: '$query\uf8ff')
-        .get();
-
-    setState(() {
-      searchResults = result.docs.map((doc) {
-        final data = doc.data();
-        return {
-          'userId': doc.id,
-          'username': data['username'],
-        };
-      }).toList();
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+
     return Scaffold(
-      appBar: AppBar(title: const Text("Messages")),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: TextField(
-              controller: searchController,
-              decoration: const InputDecoration(
-                hintText: 'Search username...',
-                border: OutlineInputBorder(),
-              ),
-              onChanged: searchUsers,
-            ),
-          ),
-          Expanded(
-            child: ListView.builder(
-              itemCount: searchResults.length,
-              itemBuilder: (context, index) {
-                final user = searchResults[index];
-                return ListTile(
-                  title: Text(user['username']),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ChatScreen(
-                          otherUserId: user['userId'],
-                          otherUsername: user['username'],
+      appBar: AppBar(
+        title: const Text('Chats'),
+      ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('chats')
+            .where('participants', arrayContains: currentUser!.uid)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final chats = snapshot.data!.docs;
+
+          if (chats.isEmpty) {
+            return const Center(child: Text('No chats yet.'));
+          }
+
+          return ListView.builder(
+            itemCount: chats.length,
+            itemBuilder: (context, index) {
+              final chat = chats[index];
+              final chatId = chat.id;
+              final data = chat.data() as Map<String, dynamic>;
+
+              final otherUserId = (data['participants'] as List<String>)
+                  .firstWhere((uid) => uid != currentUser.uid);
+
+              return FutureBuilder<DocumentSnapshot>(
+                future: FirebaseFirestore.instance.collection('users').doc(otherUserId).get(),
+                builder: (context, userSnapshot) {
+                  if (!userSnapshot.hasData) {
+                    return const ListTile(title: Text("Loading..."));
+                  }
+
+                  final userData = userSnapshot.data!.data() as Map<String, dynamic>;
+                  final username = userData['username'] ?? 'Unknown';
+                  final profileImageUrl = userData['profileImageUrl'] ?? '';
+
+                  return ListTile(
+                    leading: CircleAvatar(
+                      backgroundImage: profileImageUrl.isNotEmpty
+                          ? NetworkImage(profileImageUrl)
+                          : null,
+                      child: profileImageUrl.isEmpty ? const Icon(Icons.person) : null,
+                    ),
+                    title: Text(username),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ChatScreen(
+                            chatId: chatId,
+                            otherUserId: otherUserId,
+                            otherUsername: username,
+                            otherUserProfileUrl: profileImageUrl,
+                          ),
                         ),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-        ],
+                      );
+                    },
+                  );
+                },
+              );
+            },
+          );
+        },
       ),
     );
   }

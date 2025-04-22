@@ -1,55 +1,96 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../models/match_model.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class MatchService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final firestore = FirebaseFirestore.instance;
 
-  Future<void> createMatch(String userA, String userB) async {
-    final match = MatchModel(
-      userA: userA,
-      userB: userB,
-      createdAt: DateTime.now(),
-    );
+  Future<String?> checkAndCreateMatch(String userA, String userB) async {
+    final matchId = generateMatchId(userA, userB);
+    final matchDoc = firestore.collection('matches').doc(matchId);
 
-    await _firestore.collection('matches').add(match.toMap());
+    final matchSnapshot = await matchDoc.get();
+
+    if (matchSnapshot.exists) {
+      return matchId; // Zaten eşleşmişler
+    }
+
+    // Swipe kayıt et
+    await matchDoc.set({
+      'users': [userA, userB],
+      'timestamp': FieldValue.serverTimestamp(),
+      'lastMessageTime': null,
+    });
+
+    // Bildirim gönder
+    await _sendNotification(userA, userB);
+    await _sendNotification(userB, userA);
+
+    // Swipe count güncelle
+    await _incrementSwipeCount(userA);
+
+    return matchId;
   }
 
-  Future<List<MatchModel>> getMatches(String currentUserId) async {
-    final query = await _firestore
-        .collection('matches')
-        .where('isActive', isEqualTo: true)
-        .get();
-
-    return query.docs
-        .map((doc) => MatchModel.fromMap(doc.data()))
-        .where((match) =>
-            (match.userA == currentUserId || match.userB == currentUserId))
-        .toList();
+  Future<void> _sendNotification(String toUser, String fromUser) async {
+    await firestore
+        .collection('notifications')
+        .doc(toUser)
+        .collection('userNotifications')
+        .add({
+      'type': 'match',
+      'senderId': fromUser,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
   }
 
-  Future<void> deactivateOldMatches(Duration timeout) async {
-    final cutoff = DateTime.now().subtract(timeout);
-    final query = await _firestore
-        .collection('matches')
-        .where('createdAt', isLessThan: cutoff.toIso8601String())
-        .where('isActive', isEqualTo: true)
-        .get();
+  Future<void> _incrementSwipeCount(String userId) async {
+    final doc = firestore.collection('swipes').doc(userId);
+    final snapshot = await doc.get();
 
-    for (var doc in query.docs) {
-      await doc.reference.update({'isActive': false});
+    if (snapshot.exists) {
+      await doc.update({'count': FieldValue.increment(1)});
+    } else {
+      await doc.set({
+        'count': 1,
+        'date': Timestamp.now(),
+      });
     }
   }
 
-  Future<bool> isAlreadyMatched(String userA, String userB) async {
-    final query = await _firestore
+  Future<bool> canSwipe(String userId) async {
+    final doc = await firestore.collection('swipes').doc(userId).get();
+    if (!doc.exists) return true;
+
+    final data = doc.data()!;
+    final count = data['count'] ?? 0;
+    final date = (data['date'] as Timestamp).toDate();
+    final today = DateTime.now();
+
+    // Yeni güne geçtiyse resetle
+    if (date.day != today.day || date.month != today.month || date.year != today.year) {
+      await firestore.collection('swipes').doc(userId).set({'count': 1, 'date': Timestamp.now()});
+      return true;
+    }
+
+    return count < 50;
+  }
+
+  Future<void> cleanupExpiredMatches() async {
+    final cutoff = Timestamp.fromDate(DateTime.now().subtract(const Duration(hours: 24)));
+    final expiredMatches = await firestore
         .collection('matches')
-        .where('isActive', isEqualTo: true)
+        .where('lastMessageTime', isNull: true)
+        .where('timestamp', isLessThan: cutoff)
         .get();
 
-    return query.docs.any((doc) {
-      final data = doc.data();
-      return (data['userA'] == userA && data['userB'] == userB) ||
-             (data['userA'] == userB && data['userB'] == userA);
-    });
+    for (var doc in expiredMatches.docs) {
+      await firestore.collection('matches').doc(doc.id).delete();
+      await firestore.collection('chats').doc(doc.id).delete(); // Chat mesajlarını da sil
+    }
+  }
+
+  String generateMatchId(String uid1, String uid2) {
+    final sorted = [uid1, uid2]..sort();
+    return '${sorted[0]}_${sorted[1]}';
   }
 }

@@ -1,213 +1,211 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'other_profile_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'edit_profile_screen.dart';
+import 'story_viewer.dart';
 
-class PostWidget extends StatefulWidget {
-  final Map<String, dynamic> postData;
-  final String postId;
-
-  const PostWidget({Key? key, required this.postData, required this.postId}) : super(key: key);
+class ProfileScreen extends StatefulWidget {
+  const ProfileScreen({Key? key}) : super(key: key);
 
   @override
-  State<PostWidget> createState() => _PostWidgetState();
+  State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _PostWidgetState extends State<PostWidget> {
-  final TextEditingController _commentController = TextEditingController();
+class _ProfileScreenState extends State<ProfileScreen> {
+  final User? user = FirebaseAuth.instance.currentUser;
+  String? username;
+  String? profileImageUrl;
+  List<Map<String, dynamic>> oldStories = [];
+  bool isLoading = true;
 
-  Future<void> likePost(String postOwnerId) async {
-    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+    _loadOldStories();
+  }
 
-    await FirebaseFirestore.instance.collection('posts').doc(widget.postId).update({
-      'likes': FieldValue.arrayUnion([currentUserId])
-    });
-
-    if (postOwnerId != currentUserId) {
-      await FirebaseFirestore.instance
-          .collection('notifications')
-          .doc(postOwnerId)
-          .collection('userNotifications')
-          .add({
-        'type': 'like',
-        'senderId': currentUserId,
-        'postId': widget.postId,
-        'timestamp': FieldValue.serverTimestamp(),
+  Future<void> _loadProfile() async {
+    final doc = await FirebaseFirestore.instance.collection('users').doc(user!.uid).get();
+    final data = doc.data();
+    if (data != null) {
+      setState(() {
+        username = data['username'];
+        profileImageUrl = data['profileImageUrl'];
       });
     }
   }
 
-  Future<void> addComment(String postOwnerId, String comment) async {
-    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+  Future<void> _loadOldStories() async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('stories')
+        .doc(user!.uid)
+        .collection('storyList')
+        .orderBy('timestamp', descending: true)
+        .get();
 
-    await FirebaseFirestore.instance
-        .collection('posts')
-        .doc(widget.postId)
-        .collection('comments')
-        .add({
-      'userId': currentUserId,
-      'comment': comment,
-      'createdAt': FieldValue.serverTimestamp(),
+    final cutoff = DateTime.now().subtract(const Duration(hours: 24));
+
+    final expired = snapshot.docs
+        .where((doc) {
+          final ts = (doc['timestamp'] as Timestamp?)?.toDate();
+          return ts != null && ts.isBefore(cutoff);
+        })
+        .map((doc) => doc.data() as Map<String, dynamic>)
+        .toList();
+
+    setState(() {
+      oldStories = expired;
+      isLoading = false;
     });
-
-    if (postOwnerId != currentUserId) {
-      await FirebaseFirestore.instance
-          .collection('notifications')
-          .doc(postOwnerId)
-          .collection('userNotifications')
-          .add({
-        'type': 'comment',
-        'senderId': currentUserId,
-        'postId': widget.postId,
-        'timestamp': FieldValue.serverTimestamp(),
-      });
-    }
-
-    _commentController.clear();
-  }
-
-  Widget buildCommentList() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('posts')
-          .doc(widget.postId)
-          .collection('comments')
-          .orderBy('createdAt', descending: true)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) return const SizedBox.shrink();
-
-        final comments = snapshot.data!.docs;
-
-        return ListView.builder(
-          itemCount: comments.length,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemBuilder: (context, index) {
-            final data = comments[index].data() as Map<String, dynamic>;
-            final comment = data['comment'] ?? '';
-            final userId = data['userId'] ?? '';
-
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4),
-              child: Row(
-                children: [
-                  const Icon(Icons.comment, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text('$userId: $comment')),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final String userId = widget.postData['userId'] ?? 'Unknown';
-    final String username = widget.postData['username'] ?? 'Unknown';
-    final String description = widget.postData['description'] ?? '';
-    final String mediaUrl = widget.postData['mediaUrl'] ?? '';
-    final String profileImageUrl = widget.postData['profileImageUrl'] ?? '';
-    final int likeCount = (widget.postData['likes'] as List?)?.length ?? 0;
-
-    return Card(
-      elevation: 4,
-      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ListTile(
-            leading: GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => OtherProfileScreen(userId: userId),
-                  ),
-                );
-              },
-              child: CircleAvatar(
-                backgroundImage:
-                    profileImageUrl.isNotEmpty ? NetworkImage(profileImageUrl) : null,
-                child: profileImageUrl.isEmpty ? const Icon(Icons.person) : null,
-              ),
-            ),
-            title: Text(username),
-            trailing: const Icon(Icons.more_vert),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Profile'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              await FirebaseAuth.instance.signOut();
+              Navigator.popUntil(context, (route) => route.isFirst);
+            },
           ),
-          mediaUrl.isNotEmpty
-              ? ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.network(
-                    mediaUrl,
-                    height: 300,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) =>
-                        const Icon(Icons.broken_image, size: 100),
-                  ),
-                )
-              : const Icon(Icons.image_not_supported, size: 100),
-          Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.favorite_border),
-                onPressed: () => likePost(userId),
-              ),
-              IconButton(
-                icon: const Icon(Icons.comment_outlined),
-                onPressed: () {},
-              ),
-              const Spacer(),
-              IconButton(
-                icon: const Icon(Icons.bookmark_border),
-                onPressed: () {},
-              ),
-            ],
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child:
-                Text('$likeCount likes', style: const TextStyle(fontWeight: FontWeight.bold)),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Text(description),
-          ),
-          const SizedBox(height: 10),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _commentController,
-                    decoration: const InputDecoration(
-                      hintText: 'Write a comment...',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: () {
-                    if (_commentController.text.trim().isNotEmpty) {
-                      addComment(userId, _commentController.text.trim());
-                    }
-                  },
-                  child: const Text('Post'),
-                ),
-              ],
-            ),
-          ),
-          buildCommentList(),
-          const Divider(),
         ],
       ),
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              child: Column(
+                children: [
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircleAvatar(
+                        radius: 50,
+                        backgroundImage: profileImageUrl != null && profileImageUrl!.isNotEmpty
+                            ? (Uri.tryParse(profileImageUrl!)?.isAbsolute == true
+                                ? NetworkImage(profileImageUrl!)
+                                : FileImage(File(profileImageUrl!))) as ImageProvider
+                            : const AssetImage('assets/default_profile.png'),
+                      ),
+                      const SizedBox(width: 20),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            username ?? 'Unknown',
+                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 10),
+                          ElevatedButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const EditProfileScreen(),
+                                ),
+                              ).then((_) => _loadProfile());
+                            },
+                            child: const Text('Edit Profile'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  const Divider(),
+
+                  // Geçmiş Story'ler (24h'den eski)
+                  if (oldStories.isNotEmpty) ...[
+                    const Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: Text(
+                        'Your Past Stories (24h+)',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    SizedBox(
+                      height: 100,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: oldStories.length,
+                        itemBuilder: (context, index) {
+                          final story = oldStories[index];
+                          final url = story['mediaUrl'] ?? '';
+
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: Image.network(
+                                url,
+                                width: 80,
+                                height: 100,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    const Icon(Icons.error, color: Colors.red),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const Divider(),
+                  ],
+
+                  // Kullanıcının gönderileri
+                  StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('posts')
+                        .where('userId', isEqualTo: user!.uid)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+
+                      final posts = snapshot.data!.docs;
+
+                      if (posts.isEmpty) {
+                        return const Padding(
+                          padding: EdgeInsets.all(16.0),
+                          child: Text('You haven\'t shared any posts yet.'),
+                        );
+                      }
+
+                      return GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          crossAxisSpacing: 4,
+                          mainAxisSpacing: 4,
+                        ),
+                        itemCount: posts.length,
+                        itemBuilder: (context, index) {
+                          final post = posts[index].data() as Map<String, dynamic>;
+                          final mediaUrl = post['mediaUrl'] ?? '';
+
+                          return mediaUrl.isNotEmpty
+                              ? Image.network(
+                                  mediaUrl,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      const Icon(Icons.error),
+                                )
+                              : const Icon(Icons.image_not_supported);
+                        },
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
     );
   }
 }

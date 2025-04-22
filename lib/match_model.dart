@@ -1,31 +1,35 @@
 class MatchModel {
-  final String userA;
-  final String userB;
+  final String userId1;
+  final String userId2;
   final DateTime createdAt;
-  final bool isActive;
+  final bool isMatched;
+  final DateTime? expiresAt;
 
   MatchModel({
-    required this.userA,
-    required this.userB,
+    required this.userId1,
+    required this.userId2,
     required this.createdAt,
-    this.isActive = true,
+    required this.isMatched,
+    this.expiresAt,
   });
 
   Map<String, dynamic> toMap() {
     return {
-      'userA': userA,
-      'userB': userB,
+      'userId1': userId1,
+      'userId2': userId2,
       'createdAt': createdAt.toIso8601String(),
-      'isActive': isActive,
+      'isMatched': isMatched,
+      'expiresAt': expiresAt?.toIso8601String(),
     };
   }
 
   factory MatchModel.fromMap(Map<String, dynamic> map) {
     return MatchModel(
-      userA: map['userA'],
-      userB: map['userB'],
+      userId1: map['userId1'],
+      userId2: map['userId2'],
       createdAt: DateTime.parse(map['createdAt']),
-      isActive: map['isActive'] ?? true,
+      isMatched: map['isMatched'],
+      expiresAt: map['expiresAt'] != null ? DateTime.parse(map['expiresAt']) : null,
     );
   }
 }
