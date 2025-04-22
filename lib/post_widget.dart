@@ -22,19 +22,6 @@ class _PostWidgetState extends State<PostWidget> {
     await FirebaseFirestore.instance.collection('posts').doc(widget.postId).update({
       'likes': FieldValue.arrayUnion([currentUserId])
     });
-
-    if (postOwnerId != currentUserId) {
-      await FirebaseFirestore.instance
-          .collection('notifications')
-          .doc(postOwnerId)
-          .collection('userNotifications')
-          .add({
-        'type': 'like',
-        'senderId': currentUserId,
-        'postId': widget.postId,
-        'timestamp': FieldValue.serverTimestamp(),
-      });
-    }
   }
 
   Future<void> addComment(String postOwnerId, String comment) async {
@@ -49,19 +36,6 @@ class _PostWidgetState extends State<PostWidget> {
       'comment': comment,
       'createdAt': FieldValue.serverTimestamp(),
     });
-
-    if (postOwnerId != currentUserId) {
-      await FirebaseFirestore.instance
-          .collection('notifications')
-          .doc(postOwnerId)
-          .collection('userNotifications')
-          .add({
-        'type': 'comment',
-        'senderId': currentUserId,
-        'postId': widget.postId,
-        'timestamp': FieldValue.serverTimestamp(),
-      });
-    }
 
     _commentController.clear();
   }
@@ -113,96 +87,97 @@ class _PostWidgetState extends State<PostWidget> {
     final String profileImageUrl = widget.postData['profileImageUrl'] ?? '';
     final int likeCount = (widget.postData['likes'] as List?)?.length ?? 0;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ListTile(
-          leading: GestureDetector(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => OtherProfileScreen(userId: userId),
+    return Card(
+      margin: const EdgeInsets.all(12),
+      elevation: 5,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ListTile(
+            leading: GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => OtherProfileScreen(userId: userId)),
+                );
+              },
+              child: CircleAvatar(
+                backgroundImage: profileImageUrl.isNotEmpty
+                    ? NetworkImage(profileImageUrl)
+                    : null,
+                child: profileImageUrl.isEmpty ? const Icon(Icons.person) : null,
+              ),
+            ),
+            title: Text(username),
+            trailing: const Icon(Icons.more_vert),
+          ),
+          mediaUrl.isNotEmpty
+              ? Image.network(
+                  mediaUrl,
+                  height: 300,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) =>
+                      const Icon(Icons.broken_image, size: 100),
+                )
+              : const Icon(Icons.image_not_supported, size: 100),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.favorite_border),
+                  onPressed: () => likePost(userId),
                 ),
-              );
-            },
-            child: CircleAvatar(
-              backgroundImage: profileImageUrl.isNotEmpty
-                  ? NetworkImage(profileImageUrl)
-                  : null,
-              child: profileImageUrl.isEmpty ? const Icon(Icons.person) : null,
+                IconButton(
+                  icon: const Icon(Icons.comment_outlined),
+                  onPressed: () {},
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.bookmark_border),
+                  onPressed: () {},
+                ),
+              ],
             ),
           ),
-          title: Text(username),
-          trailing: const Icon(Icons.more_vert),
-        ),
-        mediaUrl.isNotEmpty
-            ? Image.network(
-                mediaUrl,
-                height: 300,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) =>
-                    const Icon(Icons.broken_image, size: 100),
-              )
-            : const Icon(Icons.image_not_supported, size: 100),
-        Row(
-          children: [
-            IconButton(
-              icon: const Icon(Icons.favorite_border),
-              onPressed: () => likePost(userId),
-            ),
-            IconButton(
-              icon: const Icon(Icons.comment_outlined),
-              onPressed: () {},
-            ),
-            const Spacer(),
-            IconButton(
-              icon: const Icon(Icons.bookmark_border),
-              onPressed: () {},
-            ),
-          ],
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: Text('$likeCount likes', style: const TextStyle(fontWeight: FontWeight.bold)),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: Text(description),
-        ),
-        const SizedBox(height: 10),
-
-        // Yorum yazma alanı
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _commentController,
-                  decoration: const InputDecoration(
-                    hintText: 'Write a comment...',
-                    border: OutlineInputBorder(),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Text('$likeCount likes', style: const TextStyle(fontWeight: FontWeight.bold)),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Text(description),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _commentController,
+                    decoration: const InputDecoration(
+                      hintText: 'Write a comment...',
+                      border: OutlineInputBorder(),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: () {
-                  if (_commentController.text.trim().isNotEmpty) {
-                    addComment(userId, _commentController.text.trim());
-                  }
-                },
-                child: const Text('Post'),
-              )
-            ],
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: () {
+                    if (_commentController.text.trim().isNotEmpty) {
+                      addComment(userId, _commentController.text.trim());
+                    }
+                  },
+                  child: const Text('Post'),
+                ),
+              ],
+            ),
           ),
-        ),
-
-        buildCommentList(),
-        const Divider(),
-      ],
+          buildCommentList(),
+        ],
+      ),
     );
   }
 }
