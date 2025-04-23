@@ -14,6 +14,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   final TextEditingController usernameController = TextEditingController();
+  String selectedUniversity = '';  // Üniversiteyi tutmak için bir değişken
+
+  // Türkiye'deki üniversiteler listesi (örnek olarak)
+  List<String> universities = [
+    'Hacettepe Üniversitesi',
+    'Boğaziçi Üniversitesi',
+    'İstanbul Teknik Üniversitesi',
+    'Orta Doğu Teknik Üniversitesi',
+    'Ankara Üniversitesi',
+    'İstanbul Üniversitesi',
+    'Ege Üniversitesi',
+    'Sabancı Üniversitesi',
+    'Yıldız Teknik Üniversitesi',
+    'Gazi Üniversitesi',
+    'Koç Üniversitesi',
+    'Marmara Üniversitesi',
+    'İzmir Katip Çelebi Üniversitesi',
+    'Atatürk Üniversitesi',
+    "İstanbul Medeniyet Üniversitesi",
+  ];
 
   Future<void> register() async {
     try {
@@ -29,6 +49,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         'email': userCredential.user!.email,
         'username': usernameController.text.trim(),
         'profileImageUrl': '', // Varsayılan profil resmi URL'si boş
+        'university': selectedUniversity, // Üniversiteyi Firestore'a ekliyoruz
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -86,6 +107,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     labelText: 'Password',
                     border: OutlineInputBorder(),
                   ),
+                ),
+                const SizedBox(height: 20),
+                // Üniversite seçmek için DropdownButton
+                DropdownButton<String>(
+                  value: selectedUniversity.isEmpty ? null : selectedUniversity,
+                  hint: const Text('Select University'),
+                  onChanged: (newValue) {
+                    setState(() {
+                      selectedUniversity = newValue!;
+                    });
+                  },
+                  items: universities.map<DropdownMenuItem<String>>((String value) {
+                    return DropdownMenuItem<String>(
+                      value: value,
+                      child: Text(value),
+                    );
+                  }).toList(),
                 ),
                 const SizedBox(height: 20),
                 ElevatedButton(

@@ -18,6 +18,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   File? selectedMedia;
   bool isLoading = false;
 
+  // Medya seçmek için fonksiyon
   Future<void> _pickMedia() async {
     final picker = ImagePicker();
     final pickedMedia = await picker.pickImage(source: ImageSource.gallery);
@@ -29,12 +30,14 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     }
   }
 
+  // Dosyayı Firebase Storage'a yükleyip URL almak
   Future<String> _uploadToStorage(File file, String userId, String postId) async {
     final ref = FirebaseStorage.instance.ref().child('posts/$userId/$postId.jpg');
     final uploadTask = await ref.putFile(file);
     return await uploadTask.ref.getDownloadURL();
   }
 
+  // Postu Firestore'a yüklemek
   Future<void> _uploadPost() async {
     if (selectedMedia == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -51,10 +54,10 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
       final postId = const Uuid().v4();
 
-      // Storage'a yükle ve URL'yi al
+      // Medyayı Storage'a yükleyip URL'yi al
       final mediaUrl = await _uploadToStorage(selectedMedia!, user.uid, postId);
 
-      // Firestore'a post verisini kaydet
+      // Postu Firestore'a kaydet
       await FirebaseFirestore.instance.collection('posts').doc(postId).set({
         'postId': postId,
         'userId': user.uid,
@@ -90,6 +93,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 children: [
+                  // Medya önizleme
                   if (selectedMedia != null)
                     Image.file(
                       selectedMedia!,
@@ -97,11 +101,15 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       fit: BoxFit.cover,
                     ),
                   const SizedBox(height: 20),
+
+                  // Medya seçme butonu
                   ElevatedButton(
                     onPressed: _pickMedia,
                     child: const Text('Select Image or Video'),
                   ),
                   const SizedBox(height: 20),
+
+                  // Açıklama alanı
                   TextField(
                     controller: descriptionController,
                     maxLines: 3,
@@ -111,6 +119,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     ),
                   ),
                   const SizedBox(height: 20),
+
+                  // Postu paylaşma butonu
                   ElevatedButton(
                     onPressed: _uploadPost,
                     child: const Text('Share Post'),

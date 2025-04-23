@@ -42,7 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         title: const Text(
-          'Instagram',
+          'Alrakis',
           style: TextStyle(
             fontFamily: 'Billabong',
             fontSize: 32,

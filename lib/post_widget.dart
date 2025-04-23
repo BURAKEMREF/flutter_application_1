@@ -7,7 +7,8 @@ class PostWidget extends StatefulWidget {
   final Map<String, dynamic> postData;
   final String postId;
 
-  const PostWidget({Key? key, required this.postData, required this.postId}) : super(key: key);
+  const PostWidget({Key? key, required this.postData, required this.postId})
+      : super(key: key);
 
   @override
   State<PostWidget> createState() => _PostWidgetState();
@@ -88,15 +89,36 @@ class _PostWidgetState extends State<PostWidget> {
             final comment = data['comment'] ?? '';
             final userId = data['userId'] ?? '';
 
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4),
-              child: Row(
-                children: [
-                  const Icon(Icons.comment, size: 18, color: Colors.grey),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text('$userId: $comment')),
-                ],
-              ),
+            return FutureBuilder<DocumentSnapshot>(
+              future: FirebaseFirestore.instance.collection('users').doc(userId).get(),
+              builder: (context, userSnapshot) {
+                if (!userSnapshot.hasData) {
+                  return const SizedBox.shrink(); // Kullanıcı verisi yüklenene kadar boş bırak
+                }
+
+                final user = userSnapshot.data!;
+                final username = user['username'] ?? 'Unknown User';
+                final profileImageUrl = user['profileImageUrl'] ?? '';
+
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 16,
+                        backgroundImage: profileImageUrl.isNotEmpty
+                            ? NetworkImage(profileImageUrl)
+                            : null,
+                        child: profileImageUrl.isEmpty
+                            ? const Icon(Icons.person, size: 30)
+                            : null,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text('$username: $comment')),
+                    ],
+                  ),
+                );
+              },
             );
           },
         );

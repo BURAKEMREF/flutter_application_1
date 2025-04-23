@@ -15,7 +15,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Instagram Clone',
+      title: 'Alrakis',
       themeMode: ThemeMode.system, // Cihazın temasına göre
       theme: ThemeData(
         primarySwatch: Colors.blue,

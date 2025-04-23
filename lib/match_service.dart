@@ -4,7 +4,20 @@ import 'package:firebase_auth/firebase_auth.dart';
 class MatchService {
   final firestore = FirebaseFirestore.instance;
 
+  // Kullanıcıların üniversite bilgilerini kontrol eden metod
   Future<String?> checkAndCreateMatch(String userA, String userB) async {
+    // Kullanıcıların üniversite bilgilerini alalım
+    final userADoc = await firestore.collection('users').doc(userA).get();
+    final userBDoc = await firestore.collection('users').doc(userB).get();
+
+    final userAUniversity = userADoc.data()?['university'];
+    final userBUniversity = userBDoc.data()?['university'];
+
+    // Eğer kullanıcılar farklı üniversitelerdense, eşleşme yapılmasın
+    if (userAUniversity != userBUniversity) {
+      return null; // Aynı üniversite değillerse eşleşme yapılmaz
+    }
+
     final matchId = generateMatchId(userA, userB);
     final matchDoc = firestore.collection('matches').doc(matchId);
 
@@ -21,7 +34,7 @@ class MatchService {
       'lastMessageTime': null,
     });
 
-    // Bildirim gönder
+    // Bildirim gönder (Sadece aynı üniversiteden olanlar için)
     await _sendNotification(userA, userB);
     await _sendNotification(userB, userA);
 
@@ -31,7 +44,17 @@ class MatchService {
     return matchId;
   }
 
+  // Kullanıcılara bildirim gönderen metod
   Future<void> _sendNotification(String toUser, String fromUser) async {
+    final userADoc = await firestore.collection('users').doc(fromUser).get();
+    final userBDoc = await firestore.collection('users').doc(toUser).get();
+
+    final userAUniversity = userADoc.data()?['university'];
+    final userBUniversity = userBDoc.data()?['university'];
+
+    // Eğer kullanıcılar farklı üniversitelerdense bildirim gönderme
+    if (userAUniversity != userBUniversity) return;
+
     await firestore
         .collection('notifications')
         .doc(toUser)
@@ -43,6 +66,7 @@ class MatchService {
     });
   }
 
+  // Kullanıcıların swipe sayısını güncelleyen metod
   Future<void> _incrementSwipeCount(String userId) async {
     final doc = firestore.collection('swipes').doc(userId);
     final snapshot = await doc.get();
@@ -57,6 +81,7 @@ class MatchService {
     }
   }
 
+  // Kullanıcıların günlük swipe limitini kontrol eden metod
   Future<bool> canSwipe(String userId) async {
     final doc = await firestore.collection('swipes').doc(userId).get();
     if (!doc.exists) return true;
@@ -72,9 +97,10 @@ class MatchService {
       return true;
     }
 
-    return count < 50;
+    return count < 50; // Kullanıcı günde sadece 50 swipe yapabilir
   }
 
+  // 24 saatten fazla mesajlaşma yapılmayan eşleşmeleri temizleyen metod
   Future<void> cleanupExpiredMatches() async {
     final cutoff = Timestamp.fromDate(DateTime.now().subtract(const Duration(hours: 24)));
     final expiredMatches = await firestore
@@ -89,6 +115,7 @@ class MatchService {
     }
   }
 
+  // Match ID oluşturuluyor
   String generateMatchId(String uid1, String uid2) {
     final sorted = [uid1, uid2]..sort();
     return '${sorted[0]}_${sorted[1]}';
