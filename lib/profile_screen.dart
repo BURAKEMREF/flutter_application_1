@@ -2,13 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'edit_profile_screen.dart';  // Profil düzenleme ekranı
+import 'edit_profile_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({Key? key}) : super(key: key);
-
   @override
-  _ProfileScreenState createState() => _ProfileScreenState();
+  State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
@@ -24,80 +23,66 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _getUserInfo() async {
-    if (user != null) {
-      DocumentSnapshot snapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user!.uid)
-          .get();
+    if (user == null) return;
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user!.uid)
+        .get();
 
-      setState(() {
-        username = snapshot['username'] ?? 'Unknown';
-        profileImageUrl = snapshot['profileImageUrl'] ?? '';
-        university = snapshot['university'] ?? '';
-      });
-    }
+    if (!mounted) return;
+    setState(() {
+      username        = doc['username']        ?? 'Unknown';
+      profileImageUrl = doc['profileImageUrl'] ?? '';
+      university      = doc['university']      ?? '';
+    });
   }
 
   Future<void> _deletePost(String postId, String mediaUrl) async {
-    // Firebase Storage'dan silme işlemi
-    try {
-      final storageRef = FirebaseStorage.instance.refFromURL(mediaUrl);
-      await storageRef.delete();
-    } catch (e) {
-      print("Error deleting media from storage: $e");
-    }
-
-    // Firestore'dan postu silme
+    try { await FirebaseStorage.instance.refFromURL(mediaUrl).delete(); } catch (_) {}
     await FirebaseFirestore.instance.collection('posts').doc(postId).delete();
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Post deleted successfully!')),
-    );
   }
 
+  ImageProvider<Object>? _safeImage(String? url) =>
+      (url != null && url.startsWith('http')) ? NetworkImage(url) : null;
+
   Widget _buildPostsList() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('posts')
-          .where('userId', isEqualTo: user?.uid)
-          .orderBy('timestamp', descending: true)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
+    final stream = FirebaseFirestore.instance
+        .collection('posts')                       // ✅ kök koleksiyon
+        .where('userId', isEqualTo: user!.uid)     // filtre
+        .orderBy('timestamp', descending: true)    // sıralama
+        .snapshots();
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: stream,
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-
-        final posts = snapshot.data!.docs;
-
-        if (posts.isEmpty) {
-          return const Center(child: Text('No posts available.'));
+        if (snap.hasError) {
+          return Center(child: Text('Hata: ${snap.error}'));
         }
-
+        final docs = snap.data!.docs;
+        if (docs.isEmpty) {
+          return const Center(child: Text('Henüz paylaşımınız yok.'));
+        }
         return ListView.builder(
-          itemCount: posts.length,
-          itemBuilder: (context, index) {
-            final post = posts[index];
-            final postId = post.id;
-            final postData = post.data() as Map<String, dynamic>;
-
+          itemCount: docs.length,
+          itemBuilder: (context, i) {
+            final d = docs[i].data();
             return Card(
               margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
               child: ListTile(
                 leading: CircleAvatar(
-                  backgroundImage: postData['profileImageUrl'] != null
-                      ? NetworkImage(postData['profileImageUrl'])
-                      : null,
-                  child: postData['profileImageUrl'] == null
+                  backgroundImage: _safeImage(d['profileImageUrl']),
+                  child: _safeImage(d['profileImageUrl']) == null
                       ? const Icon(Icons.person)
                       : null,
                 ),
-                title: Text(postData['username']),
-                subtitle: Text(postData['description']),
+                title: Text(d['username'] ?? ''),
+                subtitle: Text(d['description'] ?? ''),
                 trailing: IconButton(
                   icon: const Icon(Icons.delete),
-                  onPressed: () {
-                    _deletePost(postId, postData['mediaUrl']);
-                  },
+                  onPressed: () => _deletePost(docs[i].id, d['mediaUrl']),
                 ),
               ),
             );
@@ -107,47 +92,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // Profil düzenleme ekranına yönlendirme
-  void _navigateToEditProfile() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const EditProfileScreen()),
-    );
-  }
+  void _edit() => Navigator.push(
+        context, MaterialPageRoute(builder: (_) => const EditProfileScreen()));
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Profile')),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // Profil fotoğrafı ve kullanıcı adı
             CircleAvatar(
               radius: 60,
-              backgroundImage: profileImageUrl.isNotEmpty
-                  ? NetworkImage(profileImageUrl) // Profil URL varsa NetworkImage kullan
-                  : const AssetImage('assets/default_avatar.png') as ImageProvider, // Varsayılan avatar kullan
+              backgroundImage: _safeImage(profileImageUrl) ??
+                  const AssetImage('assets/default_avatar.png'),
             ),
             const SizedBox(height: 20),
-            Text(
-              username,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
+            Text(username,
+                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
             const SizedBox(height: 10),
-            Text(
-              'University: $university',
-              style: const TextStyle(fontSize: 16),
-            ),
+            Text('University: $university'),
             const SizedBox(height: 20),
-            // Profil düzenleme butonu
-            ElevatedButton(
-              onPressed: _navigateToEditProfile,
-              child: const Text('Edit Profile'),
-            ),
+            ElevatedButton(onPressed: _edit, child: const Text('Edit Profile')),
             const SizedBox(height: 20),
-            // Paylaşılan postları göster
             Expanded(child: _buildPostsList()),
           ],
         ),
