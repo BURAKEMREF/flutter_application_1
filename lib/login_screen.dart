@@ -25,8 +25,8 @@ class _LoginScreenState extends State<LoginScreen> {
       // Giriş başarılı olduğunda kullanıcıyı HomeScreen'e yönlendir
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder: (context) => HomeScreen(userEmail: userCredential.user?.email),
+         MaterialPageRoute(
+    builder: (_) => const HomeScreen(),   // sadece HomeScreen()
         ),
       );
 

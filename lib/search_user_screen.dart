@@ -2,7 +2,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'other_profile_screen.dart'; // OtherProfileScreen'i ekliyoruz
+
+import 'other_profile_screen.dart'; // Profil detayı
+import 'match_screen.dart';         // 💘 Eşleşme ekranı
 
 class SearchUserScreen extends StatefulWidget {
   const SearchUserScreen({Key? key}) : super(key: key);
@@ -14,8 +16,10 @@ class SearchUserScreen extends StatefulWidget {
 class _SearchUserScreenState extends State<SearchUserScreen> {
   final TextEditingController searchController = TextEditingController();
   List<Map<String, dynamic>> searchResults = [];
+
   final String? currentUserId = FirebaseAuth.instance.currentUser?.uid;
 
+  // -------------------- FIRESTORE SORGUSU --------------------
   Future<void> _searchUsers(String query) async {
     final result = await FirebaseFirestore.instance
         .collection('users')
@@ -25,13 +29,14 @@ class _SearchUserScreenState extends State<SearchUserScreen> {
 
     setState(() {
       searchResults = result.docs.map((doc) {
-        final data = doc.data() as Map<String, dynamic>;
-        data['userId'] = doc.id; // Belge kimliği userId olarak ayarlanıyor
+        final data = doc.data();
+        data['userId'] = doc.id; // doc.id → userId
         return data;
       }).toList();
     });
   }
 
+  // -------------------- TAKİP ET --------------------
   Future<void> _followUser(String targetUserId) async {
     if (currentUserId == null || currentUserId == targetUserId) return;
 
@@ -50,74 +55,83 @@ class _SearchUserScreenState extends State<SearchUserScreen> {
       await followingRef.doc(targetUserId).set({});
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You are now following this user!')),
+        const SnackBar(content: Text('Now following!')),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error following user: $e')),
+        SnackBar(content: Text('Follow error: $e')),
       );
     }
   }
 
+  // -------------------- UI --------------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Search Users'),
+        actions: [
+          IconButton(
+            tooltip: 'Matches',
+            icon: const Icon(Icons.people_alt_outlined), // 🤝  Eşleşme ikonu
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const MatchScreen()),
+              );
+            },
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
+            // 🔍  Arama kutusu
             TextField(
               controller: searchController,
               decoration: const InputDecoration(
                 labelText: 'Search by username',
                 border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.search),
               ),
-              onChanged: (value) {
-                _searchUsers(value);
-              },
+              onChanged: _searchUsers,
             ),
             const SizedBox(height: 20),
+
+            // 🔽  Sonuç listesi
             Expanded(
               child: ListView.builder(
                 itemCount: searchResults.length,
                 itemBuilder: (context, index) {
                   final user = searchResults[index];
-                  final String? profileImageUrl = user['profileImageUrl'];
-                  final String userId = user['userId'] ?? '';
+                  final imgUrl = user['profileImageUrl'] ?? '';
+                  final userId = user['userId'] ?? '';
 
                   if (userId.isEmpty) {
-                    return ListTile(
-                      title: const Text('Error: User ID is missing'),
+                    return const ListTile(
+                      title: Text('Error: User ID missing'),
                     );
                   }
 
                   return ListTile(
                     leading: CircleAvatar(
-                      backgroundImage: (profileImageUrl != null && profileImageUrl.isNotEmpty)
-                          ? (Uri.tryParse(profileImageUrl)?.isAbsolute == true
-                              ? NetworkImage(profileImageUrl)
-                              : FileImage(File(profileImageUrl))) as ImageProvider
-                          : const AssetImage('assets/default_profile.png'),
-                      child: profileImageUrl == null || profileImageUrl.isEmpty
-                          ? const Icon(Icons.person)
+                      backgroundImage: imgUrl.isNotEmpty && Uri.tryParse(imgUrl)?.isAbsolute == true
+                          ? NetworkImage(imgUrl)
                           : null,
+                      child: imgUrl.isEmpty ? const Icon(Icons.person) : null,
                     ),
                     title: Text(user['username'] ?? 'Unknown User'),
                     onTap: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => OtherProfileScreen(userId: userId),
+                          builder: (_) => OtherProfileScreen(userId: userId),
                         ),
                       );
                     },
                     trailing: ElevatedButton(
-                      onPressed: () {
-                        _followUser(userId);
-                      },
+                      onPressed: () => _followUser(userId),
                       child: const Text('Follow'),
                     ),
                   );

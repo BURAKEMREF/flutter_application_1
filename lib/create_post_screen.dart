@@ -6,6 +6,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:uuid/uuid.dart';
 
+/// CreatePostScreen – kullanıcının seçtiği görseli yükler ve Firestore'da
+/// "username" alanını **nickname** olarak kaydeder.
 class CreatePostScreen extends StatefulWidget {
   const CreatePostScreen({Key? key}) : super(key: key);
 
@@ -18,59 +20,50 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   File? selectedMedia;
   bool isLoading = false;
 
-  // Medya seçmek için fonksiyon
   Future<void> _pickMedia() async {
     final picker = ImagePicker();
-    final pickedMedia = await picker.pickImage(source: ImageSource.gallery);
-
-    if (pickedMedia != null) {
-      setState(() {
-        selectedMedia = File(pickedMedia.path);
-      });
-    }
+    final picked = await picker.pickImage(source: ImageSource.gallery);
+    if (picked != null) setState(() => selectedMedia = File(picked.path));
   }
 
-  // Dosyayı Firebase Storage'a yükleyip URL almak
-  Future<String> _uploadToStorage(File file, String userId, String postId) async {
-    final ref = FirebaseStorage.instance.ref().child('posts/$userId/$postId.jpg');
-    final uploadTask = await ref.putFile(file);
-    return await uploadTask.ref.getDownloadURL();
+  Future<String> _uploadToStorage(File file, String uid, String postId) async {
+    final ref = FirebaseStorage.instance.ref('posts/$uid/$postId.jpg');
+    await ref.putFile(file);
+    return ref.getDownloadURL();
   }
 
-  // Postu Firestore'a yüklemek
   Future<void> _uploadPost() async {
     if (selectedMedia == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select an image or video')),
-      );
+        const SnackBar(content: Text('Please select an image')),);
       return;
     }
-
     setState(() => isLoading = true);
 
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      final postId = const Uuid().v4();
+      // Kullanıcının kayıtlı NICKNAME'ini al
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users').doc(user.uid).get();
+      final nickname = userDoc['username'] ?? user.email;
 
-      // Medyayı Storage'a yükleyip URL'yi al
+      final postId   = const Uuid().v4();
       final mediaUrl = await _uploadToStorage(selectedMedia!, user.uid, postId);
 
-      // Postu Firestore'a kaydet
       await FirebaseFirestore.instance.collection('posts').doc(postId).set({
-        'postId': postId,
-        'userId': user.uid,
-        'username': user.email,
+        'postId'     : postId,
+        'userId'     : user.uid,
+        'username'   : nickname,                          // <-- nickname
         'description': descriptionController.text.trim(),
-        'mediaUrl': mediaUrl, // Storage linki
-        'timestamp': FieldValue.serverTimestamp(),
+        'mediaUrl'   : mediaUrl,
+        'timestamp'  : FieldValue.serverTimestamp(),
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Post shared successfully!')),
       );
-
       Navigator.pop(context);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -84,32 +77,18 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Create Post'),
-      ),
+      appBar: AppBar(title: const Text('Create Post')),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 children: [
-                  // Medya önizleme
                   if (selectedMedia != null)
-                    Image.file(
-                      selectedMedia!,
-                      height: 200,
-                      fit: BoxFit.cover,
-                    ),
+                    Image.file(selectedMedia!, height: 200, fit: BoxFit.cover),
                   const SizedBox(height: 20),
-
-                  // Medya seçme butonu
-                  ElevatedButton(
-                    onPressed: _pickMedia,
-                    child: const Text('Select Image or Video'),
-                  ),
+                  ElevatedButton(onPressed: _pickMedia, child: const Text('Select Image')),
                   const SizedBox(height: 20),
-
-                  // Açıklama alanı
                   TextField(
                     controller: descriptionController,
                     maxLines: 3,
@@ -119,12 +98,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     ),
                   ),
                   const SizedBox(height: 20),
-
-                  // Postu paylaşma butonu
-                  ElevatedButton(
-                    onPressed: _uploadPost,
-                    child: const Text('Share Post'),
-                  ),
+                  ElevatedButton(onPressed: _uploadPost, child: const Text('Share Post')),
                 ],
               ),
             ),

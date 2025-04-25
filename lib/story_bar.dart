@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'story_viewer.dart'; // Hikaye görüntüleyici sayfa
 
 class StoryBar extends StatelessWidget {
   const StoryBar({Key? key}) : super(key: key);
@@ -11,47 +9,80 @@ class StoryBar extends StatelessWidget {
     return SizedBox(
       height: 100,
       child: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('stories').snapshots(),
+        // “latest” alanına göre sırala – kendiniz de dâhil
+        stream: FirebaseFirestore.instance
+            .collection('stories')
+            .orderBy('latest', descending: true)
+            .snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final storyDocs = snapshot.data!.docs;
+          final docs = snapshot.data!.docs;
+
+          if (docs.isEmpty) {
+            return const Center(child: Text('No stories yet'));
+          }
 
           return ListView.builder(
             scrollDirection: Axis.horizontal,
-            itemCount: storyDocs.length,
-            itemBuilder: (context, index) {
-              final userDoc = storyDocs[index];
-              final userId = userDoc.id;
+            itemCount: docs.length,
+            itemBuilder: (context, i) {
+              final userId = docs[i].id;
 
-              return GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => StoryViewer(userId: userId),
+              // *** Her kullanıcı için profil & nick çek ***
+              return FutureBuilder<DocumentSnapshot>(
+                future: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(userId)
+                    .get(),
+                builder: (context, userSnap) {
+                  if (!userSnap.hasData) {
+                    return const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: CircleAvatar(radius: 28),
+                    );
+                  }
+
+                  final uData  = userSnap.data!.data() as Map<String, dynamic>;
+                  final avatar = uData['profileImageUrl'] ?? '';
+                  final nick   = uData['username']        ?? userId.substring(0, 5);
+
+                  return GestureDetector(
+                    onTap: () {
+                      Navigator.pushNamed(context, '/storyViewer',
+                          arguments: userId); // mevcut StoryViewer yolunuz
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                      child: Column(
+                        children: [
+                          CircleAvatar(
+                            radius: 32,
+                            backgroundColor: Colors.blue,
+                            backgroundImage:
+                                avatar.isNotEmpty ? NetworkImage(avatar) : null,
+                            child: avatar.isEmpty
+                                ? const Icon(Icons.person, color: Colors.white)
+                                : null,
+                          ),
+                          const SizedBox(height: 4),
+                          SizedBox(
+                            width: 68,
+                            child: Text(
+                              nick,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 },
-                child: Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Column(
-                    children: [
-                      const CircleAvatar(
-                        radius: 28,
-                        backgroundColor: Colors.blue,
-                        child: Icon(Icons.person, color: Colors.white),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        userId.substring(0, 5),
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
               );
             },
           );

@@ -21,53 +21,58 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
   Future<void> _pickMedia() async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery);
-
-    if (picked != null) {
-      setState(() {
-        _mediaFile = File(picked.path);
-      });
-    }
+    if (picked != null) setState(() => _mediaFile = File(picked.path));
   }
 
+  // ---------------------------- updated ----------------------------
   Future<void> _uploadStory() async {
     if (_mediaFile == null) return;
     setState(() => _isUploading = true);
 
     try {
       final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
       final storyId = const Uuid().v4();
       final ref = FirebaseStorage.instance
           .ref()
           .child('stories')
-          .child(user!.uid)
+          .child(user.uid)
           .child('$storyId.jpg');
 
       await ref.putFile(_mediaFile!);
       final mediaUrl = await ref.getDownloadURL();
 
+      // alt-belge
       await FirebaseFirestore.instance
           .collection('stories')
           .doc(user.uid)
           .collection('storyList')
           .doc(storyId)
           .set({
-        'mediaUrl': mediaUrl,
-        'text': _textController.text.trim(),
+        'mediaUrl' : mediaUrl,
+        'text'     : _textController.text.trim(),
         'timestamp': FieldValue.serverTimestamp(),
       });
+
+      // 🔔 parent belgedeki latest alanını güncelle
+      await FirebaseFirestore.instance
+          .collection('stories')
+          .doc(user.uid)
+          .set({'latest': FieldValue.serverTimestamp()}, SetOptions(merge: true));
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Story uploaded!')),
       );
       Navigator.pop(context);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {
       setState(() => _isUploading = false);
     }
   }
+  // ----------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
